@@ -36,7 +36,7 @@ export default function Topbar({ user }: { user: CurrentUser }) {
     .toUpperCase();
 
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-[14px] border-b border-line bg-bg px-4 py-[14px] md:px-[26px]">
+    <header className="sticky top-0 z-20 flex items-center gap-[14px] border-b border-line bg-bg px-4 py-[14px] pl-16 md:px-[26px] md:pl-[26px]">
       <div>
         <div className="font-display text-[10px] font-extrabold tracking-[.02em] text-accent">
           Tucci Elite
