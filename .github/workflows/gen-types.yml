@@ -1,0 +1,30 @@
+name: Generate Supabase types
+
+on:
+  push:
+    paths:
+      - "supabase/migrations/**"
+  workflow_dispatch:
+
+jobs:
+  gen-types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Generate types
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase gen types typescript \
+            --project-id ${{ secrets.SUPABASE_PROJECT_REF }} \
+            --schema public > src/lib/db/types.ts
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add src/lib/db/types.ts
+          git diff --staged --quiet || git commit -m "chore: regenerate db types"
+          git push

@@ -1,0 +1,47 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --ink: #0A0A0A;
+  --sky: #7DC4E8;
+  --accent: #1E78A6;
+  --gold: #F5C518;
+  --bg: #F4F6F9;
+  --paper: #FFFFFF;
+  --line: #E5E9EF;
+  --line-2: #D8DDE5;
+  --text: #0A0A0A;
+  --muted: #3A3F4D;
+  --success: #10B981;
+  --danger: #DC2626;
+  --fd: 'Archivo', sans-serif;
+  --fs: 'DM Sans', sans-serif;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --paper: #1C1C1E;
+  --line: rgba(255,255,255,.09);
+  --line-2: rgba(255,255,255,.16);
+  --text: #FFFFFF;
+  --muted: #98989F;
+  --accent: #7DC4E8;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--fs);
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+}
+
+.fd { font-family: var(--fd); }
+.tnum { font-variant-numeric: tabular-nums; }
