@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { moneyExact } from "@/lib/format";
 import {
   createAsset,
@@ -48,6 +49,7 @@ export default function SettingsManager({
   const typeLabel = (id: string | null) =>
     assetTypes.find((t) => t.id === id)?.label ?? "No type";
 
+  // add forms
   const [aName, setAName] = useState("");
   const [aType, setAType] = useState(assetTypes[0]?.id ?? "");
   const [newType, setNewType] = useState("");
@@ -70,12 +72,28 @@ export default function SettingsManager({
 
   return (
     <div className="mx-auto max-w-[760px]">
+      <Link
+        href="/settings/cages"
+        className="mb-6 flex items-center gap-3 rounded-[16px] border border-line bg-paper px-4 py-[15px] hover:border-accent"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-[16px] font-bold tracking-[-.01em] text-text">
+            Cage &amp; Field Setup
+          </span>
+          <span className="mt-[2px] block text-[13px] text-muted">
+            Half-cage booking and which field covers which cages
+          </span>
+        </span>
+        <span className="shrink-0 text-muted">›</span>
+      </Link>
+
       {err && (
         <div className="mb-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[13px] text-danger">
           {err}
         </div>
       )}
 
+      {/* ---------- SPACE TYPES ---------- */}
       <Section title="Space Types">
         <div className="mb-3 overflow-hidden rounded-[16px] border border-line bg-paper">
           {assetTypes.length === 0 ? (
@@ -148,6 +166,7 @@ export default function SettingsManager({
         </div>
       </Section>
 
+      {/* ---------- SPACES ---------- */}
       <Section title="Spaces">
         <div className="mb-3 overflow-hidden rounded-[16px] border border-line bg-paper">
           {assets.length === 0 ? (
@@ -246,6 +265,7 @@ export default function SettingsManager({
         </div>
       </Section>
 
+      {/* ---------- SERVICES ---------- */}
       <Section title="Services & Pricing">
         <div className="mb-3 overflow-hidden rounded-[16px] border border-line bg-paper">
           {services.length === 0 ? (
