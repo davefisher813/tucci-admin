@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { moneyExact } from "@/lib/format";
 import {
   createAsset,
+  updateAsset,
   deleteAsset,
   createService,
+  updateService,
   deleteService,
 } from "@/lib/data/settings-actions";
 import type { Asset, Service } from "@/lib/data/resources";
@@ -22,6 +24,8 @@ const ASSET_TYPES = [
   { value: "strength_zone", label: "Strength Zone" },
   { value: "full_facility", label: "Full Facility" },
 ];
+
+const CATEGORIES = ["Cage Rentals", "Lessons", "Memberships", "Field & Facility"];
 
 function Section({
   title,
@@ -50,6 +54,8 @@ export default function SettingsManager({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [editAsset, setEditAsset] = useState<string | null>(null);
+  const [editService, setEditService] = useState<string | null>(null);
 
   const [aName, setAName] = useState("");
   const [aType, setAType] = useState("cage_full");
@@ -129,29 +135,51 @@ export default function SettingsManager({
               No spaces yet. Add your cages, gym, and lanes below.
             </div>
           ) : (
-            assets.map((a) => (
-              <div
-                key={a.id}
-                className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
-              >
-                <div className="flex-1">
-                  <div className="font-display text-[15px] font-bold text-text">
-                    {a.name}
-                  </div>
-                  <div className="text-[12px] text-muted">
-                    {ASSET_TYPES.find((t) => t.value === a.asset_type)?.label ??
-                      a.asset_type}
-                  </div>
-                </div>
-                <button
-                  onClick={() => removeSpace(a.id)}
-                  disabled={busy}
-                  className="rounded-[8px] border border-line-2 px-3 py-[6px] font-display text-[11px] font-extrabold text-danger hover:border-danger disabled:opacity-40"
+            assets.map((a) =>
+              editAsset === a.id ? (
+                <AssetEditRow
+                  key={a.id}
+                  asset={a}
+                  busy={busy}
+                  onCancel={() => setEditAsset(null)}
+                  onSaved={() => {
+                    setEditAsset(null);
+                    router.refresh();
+                  }}
+                  onError={setErr}
+                  onSetBusy={setBusy}
+                />
+              ) : (
+                <div
+                  key={a.id}
+                  className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
                 >
-                  Remove
-                </button>
-              </div>
-            ))
+                  <div className="flex-1">
+                    <div className="font-display text-[15px] font-bold text-text">
+                      {a.name}
+                    </div>
+                    <div className="text-[12px] text-muted">
+                      {ASSET_TYPES.find((t) => t.value === a.asset_type)?.label ??
+                        a.asset_type}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setEditAsset(a.id)}
+                    disabled={busy}
+                    className="rounded-[8px] border border-line-2 px-3 py-[6px] font-display text-[11px] font-extrabold text-text hover:border-accent disabled:opacity-40"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => removeSpace(a.id)}
+                    disabled={busy}
+                    className="rounded-[8px] border border-line-2 px-3 py-[6px] font-display text-[11px] font-extrabold text-danger hover:border-danger disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )
+            )
           )}
         </div>
 
@@ -195,29 +223,51 @@ export default function SettingsManager({
               No services yet. Add what you offer and the price.
             </div>
           ) : (
-            services.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
-              >
-                <div className="flex-1">
-                  <div className="font-display text-[15px] font-bold text-text">
-                    {s.name}
-                  </div>
-                  <div className="text-[12px] text-muted">{s.category}</div>
-                </div>
-                <div className="tnum font-display text-[14px] font-extrabold text-text">
-                  {moneyExact(s.base_rate_cents)}/hr
-                </div>
-                <button
-                  onClick={() => removeService(s.id)}
-                  disabled={busy}
-                  className="rounded-[8px] border border-line-2 px-3 py-[6px] font-display text-[11px] font-extrabold text-danger hover:border-danger disabled:opacity-40"
+            services.map((s) =>
+              editService === s.id ? (
+                <ServiceEditRow
+                  key={s.id}
+                  service={s}
+                  busy={busy}
+                  onCancel={() => setEditService(null)}
+                  onSaved={() => {
+                    setEditService(null);
+                    router.refresh();
+                  }}
+                  onError={setErr}
+                  onSetBusy={setBusy}
+                />
+              ) : (
+                <div
+                  key={s.id}
+                  className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
                 >
-                  Remove
-                </button>
-              </div>
-            ))
+                  <div className="flex-1">
+                    <div className="font-display text-[15px] font-bold text-text">
+                      {s.name}
+                    </div>
+                    <div className="text-[12px] text-muted">{s.category}</div>
+                  </div>
+                  <div className="tnum font-display text-[14px] font-extrabold text-text">
+                    {moneyExact(s.base_rate_cents)}/hr
+                  </div>
+                  <button
+                    onClick={() => setEditService(s.id)}
+                    disabled={busy}
+                    className="rounded-[8px] border border-line-2 px-3 py-[6px] font-display text-[11px] font-extrabold text-text hover:border-accent disabled:opacity-40"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => removeService(s.id)}
+                    disabled={busy}
+                    className="rounded-[8px] border border-line-2 px-3 py-[6px] font-display text-[11px] font-extrabold text-danger hover:border-danger disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )
+            )
           )}
         </div>
 
@@ -238,10 +288,9 @@ export default function SettingsManager({
                 onChange={(e) => setSCat(e.target.value)}
                 className="sel flex-1"
               >
-                <option>Cage Rentals</option>
-                <option>Lessons</option>
-                <option>Memberships</option>
-                <option>Field &amp; Facility</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
               </select>
               <div className="flex items-center gap-2 sm:w-[160px]">
                 <span className="text-[14px] text-muted">$</span>
@@ -270,6 +319,160 @@ export default function SettingsManager({
         .sel{border:1px solid var(--line-2);background:var(--paper);color:var(--text);border-radius:8px;padding:9px 11px;outline:none;font-family:var(--fs);font-size:14px;height:40px;}
         .sel:focus{border-color:var(--accent);}
       `}</style>
+    </div>
+  );
+}
+
+function AssetEditRow({
+  asset,
+  busy,
+  onCancel,
+  onSaved,
+  onError,
+  onSetBusy,
+}: {
+  asset: Asset;
+  busy: boolean;
+  onCancel: () => void;
+  onSaved: () => void;
+  onError: (s: string | null) => void;
+  onSetBusy: (b: boolean) => void;
+}) {
+  const [name, setName] = useState(asset.name);
+  const [type, setType] = useState(asset.asset_type);
+
+  async function save() {
+    if (!name.trim()) return onError("Enter a space name.");
+    onSetBusy(true);
+    onError(null);
+    const res = await updateAsset({
+      id: asset.id,
+      name: name.trim(),
+      asset_type: type,
+      display_order: asset.display_order,
+    });
+    onSetBusy(false);
+    if (res.error) return onError(res.error);
+    onSaved();
+  }
+
+  return (
+    <div className="flex flex-col gap-3 border-b border-line bg-bg/40 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center">
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="sel flex-1"
+      />
+      <select
+        value={type}
+        onChange={(e) => setType(e.target.value)}
+        className="sel sm:w-[170px]"
+      >
+        {ASSET_TYPES.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label}
+          </option>
+        ))}
+      </select>
+      <div className="flex gap-2">
+        <button
+          onClick={save}
+          disabled={busy}
+          className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[16px] font-display text-[11px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={busy}
+          className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[16px] font-display text-[11px] font-extrabold tracking-[.03em] text-text"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ServiceEditRow({
+  service,
+  busy,
+  onCancel,
+  onSaved,
+  onError,
+  onSetBusy,
+}: {
+  service: Service;
+  busy: boolean;
+  onCancel: () => void;
+  onSaved: () => void;
+  onError: (s: string | null) => void;
+  onSetBusy: (b: boolean) => void;
+}) {
+  const [name, setName] = useState(service.name);
+  const [cat, setCat] = useState(service.category);
+  const [price, setPrice] = useState(String(service.base_rate_cents / 100));
+
+  async function save() {
+    if (!name.trim()) return onError("Enter a service name.");
+    const dollars = parseFloat(price);
+    if (isNaN(dollars) || dollars < 0) return onError("Enter a valid price.");
+    onSetBusy(true);
+    onError(null);
+    const res = await updateService({
+      id: service.id,
+      name: name.trim(),
+      category: cat,
+      base_rate_cents: Math.round(dollars * 100),
+    });
+    onSetBusy(false);
+    if (res.error) return onError(res.error);
+    onSaved();
+  }
+
+  return (
+    <div className="flex flex-col gap-3 border-b border-line bg-bg/40 px-4 py-3 last:border-b-0">
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="sel"
+      />
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <select
+          value={cat}
+          onChange={(e) => setCat(e.target.value)}
+          className="sel flex-1"
+        >
+          {[...new Set([cat, ...CATEGORIES])].map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
+        <div className="flex items-center gap-2 sm:w-[150px]">
+          <span className="text-[14px] text-muted">$</span>
+          <input
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            inputMode="decimal"
+            className="sel flex-1"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={save}
+            disabled={busy}
+            className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[16px] font-display text-[11px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+          >
+            Save
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[16px] font-display text-[11px] font-extrabold tracking-[.03em] text-text"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
