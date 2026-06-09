@@ -105,3 +105,19 @@ export async function getAthletes(): Promise<AthleteLite[]> {
     .order("last_name", { ascending: true });
   return (data as AthleteLite[]) ?? [];
 }
+
+// Coverage config: which cages each field/area sits over.
+// Returns { parentAssetId: [childAssetId, ...] }.
+export async function getSpaceCoverage(): Promise<Record<string, string[]>> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("space_coverage")
+    .select("parent_asset_id, child_asset_id");
+  const map: Record<string, string[]> = {};
+  for (const row of (data as
+    | { parent_asset_id: string; child_asset_id: string }[]
+    | null) ?? []) {
+    (map[row.parent_asset_id] ??= []).push(row.child_asset_id);
+  }
+  return map;
+}
