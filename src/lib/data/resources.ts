@@ -3,7 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 export type Asset = {
   id: string;
   name: string;
-  asset_type: string;
+  asset_type_id: string | null;
+  description: string | null;
+  features: string[] | null;
+  is_splittable: boolean;
+  display_order: number;
+};
+
+export type AssetType = {
+  id: string;
+  label: string;
   display_order: number;
 };
 
@@ -33,10 +42,22 @@ export async function getAssets(): Promise<Asset[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("assets")
-    .select("id, name, asset_type, display_order")
+    .select(
+      "id, name, asset_type_id, description, features, is_splittable, display_order"
+    )
     .eq("is_active", true)
     .order("display_order", { ascending: true });
   return (data as Asset[]) ?? [];
+}
+
+export async function getAssetTypes(): Promise<AssetType[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("asset_types")
+    .select("id, label, display_order")
+    .eq("is_active", true)
+    .order("display_order", { ascending: true });
+  return (data as AssetType[]) ?? [];
 }
 
 export async function getServices(): Promise<Service[]> {
@@ -53,7 +74,6 @@ export async function getServices(): Promise<Service[]> {
 
 export async function getCoaches(): Promise<Coach[]> {
   const supabase = await createClient();
-  // Coaches are users who coach: role in coach/admin/owner.
   const { data } = await supabase
     .from("users")
     .select("id, full_name, role")
