@@ -1,0 +1,28 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+
+type ActionResult = { error: string | null };
+
+export async function updateServiceRates(input: {
+  id: string;
+  name: string;
+  category: string;
+  base_rate_cents: number;
+  peak_rate_cents: number | null;
+  min_duration_hours: number;
+}): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("services")
+    .update({
+      name: input.name,
+      category: input.category,
+      base_rate_cents: input.base_rate_cents,
+      peak_rate_cents: input.peak_rate_cents,
+      min_duration_hours: input.min_duration_hours,
+    })
+    .eq("id", input.id);
+  if (error) return { error: error.message };
+  return { error: null };
+}
