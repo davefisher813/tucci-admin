@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { getAssets, getCoaches, getServices } from "@/lib/data/resources";
+import {
+  getAssets,
+  getCoaches,
+  getServices,
+  getSpaceCoverage,
+} from "@/lib/data/resources";
 import { ymd } from "@/lib/format";
 import DateNav from "@/components/admin/DateNav";
 import ScheduleGrid, {
@@ -19,10 +24,16 @@ type Joined = {
   status: string;
   total_cents: number | null;
   booking_type: string | null;
+  half_slot: number | null;
   services: { name: string } | null;
   coach: { full_name: string } | null;
   families: { family_name: string } | null;
 };
+
+function endHourCeil(iso: string): number {
+  const d = new Date(iso);
+  return d.getMinutes() > 0 ? d.getHours() + 1 : d.getHours();
+}
 
 export default async function SchedulePage({
   searchParams,
@@ -37,17 +48,18 @@ export default async function SchedulePage({
   end.setDate(end.getDate() + 1);
 
   const supabase = await createClient();
-  const [assets, coaches, services] = await Promise.all([
+  const [assets, coaches, services, coverage] = await Promise.all([
     getAssets(),
     getCoaches(),
     getServices(),
+    getSpaceCoverage(),
   ]);
 
   const { data, error } = await supabase
     .from("bookings")
     .select(
       `id, booking_number, asset_id, coach_id, service_id, start_time, end_time,
-       status, total_cents, booking_type,
+       status, total_cents, booking_type, half_slot,
        services ( name ),
        coach:users!bookings_coach_id_fkey ( full_name ),
        families ( family_name )`
@@ -71,10 +83,16 @@ export default async function SchedulePage({
     total_cents: b.total_cents ?? 0,
     who:
       b.families?.family_name ??
-      (b.booking_type ? b.booking_type.replace(/_/g, " ") : "Session"),
+      (b.booking_type
+        ? b.booking_type
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase())
+        : "Session"),
     service_name: b.services?.name ?? "—",
     coach_name: b.coach?.full_name ?? "Unassigned",
     start_hour: new Date(b.start_time).getHours(),
+    end_hour: endHourCeil(b.end_time),
+    half_slot: b.half_slot,
   }));
 
   return (
@@ -99,6 +117,7 @@ export default async function SchedulePage({
           bookings={bookings}
           coaches={coaches}
           services={services}
+          coverage={coverage}
         />
       )}
     </div>
