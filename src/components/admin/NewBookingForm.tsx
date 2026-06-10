@@ -11,6 +11,7 @@ import type {
   FamilyLite,
   Service,
 } from "@/lib/data/resources";
+import FacilityMap from "@/components/admin/FacilityMap";
 
 const BOOKING_TYPES = [
   "lesson",
@@ -21,12 +22,8 @@ const BOOKING_TYPES = [
   "membership_use",
 ];
 
-const portionBtn = (active: boolean) =>
-  `flex-1 rounded-[9px] border px-3 py-[9px] font-display text-[13px] font-extrabold ${
-    active
-      ? "border-accent bg-accent text-white"
-      : "border-line-2 bg-paper text-text"
-  }`;
+const titleCase = (s: string) =>
+  s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function NewBookingForm({
   assets,
@@ -47,6 +44,7 @@ export default function NewBookingForm({
   const initialDate = params.get("date") ?? new Date().toISOString().slice(0, 10);
   const initialHour = params.get("hour") ? Number(params.get("hour")) : 16;
   const initialAsset = params.get("asset") ?? (assets[0]?.id ?? "");
+  const initialHalf = params.get("portion") === "half";
 
   const [bookingType, setBookingType] = useState("lesson");
   const [assetId, setAssetId] = useState(initialAsset);
@@ -57,7 +55,7 @@ export default function NewBookingForm({
   const [date, setDate] = useState(initialDate);
   const [startHour, setStartHour] = useState(initialHour);
   const [durationHours, setDurationHours] = useState(1);
-  const [wantHalf, setWantHalf] = useState(false);
+  const [wantHalf, setWantHalf] = useState(initialHalf);
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -74,8 +72,8 @@ export default function NewBookingForm({
 
   const baseCents = service?.base_rate_cents ?? 0;
   const totalCents = Math.round(baseCents * durationHours);
-  const splittable =
-    assets.find((a) => a.id === assetId)?.is_splittable ?? false;
+  const selectedAsset = assets.find((a) => a.id === assetId) ?? null;
+  const splittable = selectedAsset?.is_splittable ?? false;
 
   function toggleAthlete(id: string) {
     setAthleteIds((prev) =>
@@ -133,49 +131,62 @@ export default function NewBookingForm({
           >
             {BOOKING_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t.replace(/_/g, " ")}
+                {titleCase(t)}
               </option>
             ))}
           </select>
         </Field>
 
-        <Field label="Space">
-          <select
-            value={assetId}
-            onChange={(e) => {
-              setAssetId(e.target.value);
-              setWantHalf(false);
-            }}
-            className="sel"
-          >
-            {assets.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        {splittable && (
-          <Field label="Book as">
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setWantHalf(false)}
-                className={portionBtn(!wantHalf)}
-              >
-                Whole
-              </button>
-              <button
-                type="button"
-                onClick={() => setWantHalf(true)}
-                className={portionBtn(wantHalf)}
-              >
-                Half
-              </button>
+        <div>
+          <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+            Space
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_240px]">
+            <FacilityMap
+              assets={assets}
+              selectedAssetId={assetId}
+              onSelect={(id) => {
+                setAssetId(id);
+                setWantHalf(false);
+              }}
+            />
+            <div className="nbk-selected-card">
+              <div>
+                <div className="nbk-selected-eyebrow">Selected Space</div>
+                <div className="nbk-selected-title">
+                  {selectedAsset ? selectedAsset.name : "Pick a lane"}
+                </div>
+                {selectedAsset && (
+                  <div className="nbk-selected-meta">
+                    {splittable ? "Splittable cage" : "Whole space"}
+                  </div>
+                )}
+              </div>
+              {splittable && (
+                <div
+                  className="nbk-size-toggle"
+                  role="group"
+                  aria-label="Lane size"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setWantHalf(false)}
+                    className={`nbk-size-btn${!wantHalf ? " on" : ""}`}
+                  >
+                    Full Lane
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWantHalf(true)}
+                    className={`nbk-size-btn${wantHalf ? " on" : ""}`}
+                  >
+                    Half Lane
+                  </button>
+                </div>
+              )}
             </div>
-          </Field>
-        )}
+          </div>
+        </div>
 
         <Field label="Service">
           <select
