@@ -21,6 +21,13 @@ const BOOKING_TYPES = [
   "membership_use",
 ];
 
+const portionBtn = (active: boolean) =>
+  `flex-1 rounded-[9px] border px-3 py-[9px] font-display text-[13px] font-extrabold ${
+    active
+      ? "border-accent bg-accent text-white"
+      : "border-line-2 bg-paper text-text"
+  }`;
+
 export default function NewBookingForm({
   assets,
   services,
@@ -50,6 +57,7 @@ export default function NewBookingForm({
   const [date, setDate] = useState(initialDate);
   const [startHour, setStartHour] = useState(initialHour);
   const [durationHours, setDurationHours] = useState(1);
+  const [wantHalf, setWantHalf] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -66,6 +74,8 @@ export default function NewBookingForm({
 
   const baseCents = service?.base_rate_cents ?? 0;
   const totalCents = Math.round(baseCents * durationHours);
+  const splittable =
+    assets.find((a) => a.id === assetId)?.is_splittable ?? false;
 
   function toggleAthlete(id: string) {
     setAthleteIds((prev) =>
@@ -95,6 +105,7 @@ export default function NewBookingForm({
       base_rate_cents: baseCents,
       peak_premium_cents: 0,
       total_cents: totalCents,
+      want_half: splittable && wantHalf,
     });
     setBusy(false);
 
@@ -131,7 +142,10 @@ export default function NewBookingForm({
         <Field label="Space">
           <select
             value={assetId}
-            onChange={(e) => setAssetId(e.target.value)}
+            onChange={(e) => {
+              setAssetId(e.target.value);
+              setWantHalf(false);
+            }}
             className="sel"
           >
             {assets.map((a) => (
@@ -141,6 +155,27 @@ export default function NewBookingForm({
             ))}
           </select>
         </Field>
+
+        {splittable && (
+          <Field label="Book as">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setWantHalf(false)}
+                className={portionBtn(!wantHalf)}
+              >
+                Whole
+              </button>
+              <button
+                type="button"
+                onClick={() => setWantHalf(true)}
+                className={portionBtn(wantHalf)}
+              >
+                Half
+              </button>
+            </div>
+          </Field>
+        )}
 
         <Field label="Service">
           <select
