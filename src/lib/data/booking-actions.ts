@@ -65,43 +65,68 @@ export async function createBooking(input: {
   base_rate_cents: number;
   peak_premium_cents: number;
   total_cents: number;
+  want_half: boolean;
 }): Promise<ActionResult> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("bookings")
-    .insert({
-      booking_type: input.booking_type,
-      status: "confirmed",
-      asset_id: input.asset_id,
-      coach_id: input.coach_id,
-      family_id: input.family_id,
-      service_id: input.service_id,
-      start_time: input.start_time,
-      end_time: input.end_time,
-      base_rate_cents: input.base_rate_cents,
-      peak_premium_cents: input.peak_premium_cents,
-      total_cents: input.total_cents,
-      source: "admin",
-    })
-    .select("id")
-    .single();
+  const isConflict = (msg: string) => /23p01|overlap|exclude/i.test(msg);
 
-  if (error) return { error: mapDbError(error.message) };
+  // Whole booking uses a null slot. A half tries slot 1, then slot 2, taking
+  // whichever side is open. The DB conflict check is the source of truth.
+  const candidates: (number | null)[] = input.want_half ? [1, 2] : [null];
+  let bookingId: string | null = null;
+  let lastErr = "";
 
-  const bookingId = (data as { id: string }).id;
+  for (const slot of candidates) {
+    const { data, error } = await supabase
+      .from("bookings")
+      .insert({
+        booking_type: input.booking_type,
+        status: "confirmed",
+        asset_id: input.asset_id,
+        coach_id: input.coach_id,
+        family_id: input.family_id,
+        service_id: input.service_id,
+        start_time: input.start_time,
+        end_time: input.end_time,
+        base_rate_cents: input.base_rate_cents,
+        peak_premium_cents: input.peak_premium_cents,
+        total_cents: input.total_cents,
+        half_slot: slot,
+        source: "admin",
+      })
+      .select("id")
+      .single();
+
+    if (!error) {
+      bookingId = (data as { id: string }).id;
+      break;
+    }
+    lastErr = error.message;
+    const moreToTry = slot !== candidates[candidates.length - 1];
+    if (!(isConflict(error.message) && moreToTry)) break;
+  }
+
+  if (!bookingId) {
+    if (input.want_half && isConflict(lastErr)) {
+      return { error: "Both halves of that cage are booked for that time." };
+    }
+    return { error: mapDbError(lastErr) };
+  }
+
+  const id = bookingId;
 
   // Link athletes (group lessons allow multiple).
   if (input.athlete_ids.length > 0) {
     const rows = input.athlete_ids.map((athlete_id) => ({
-      booking_id: bookingId,
+      booking_id: id,
       athlete_id,
     }));
     const { error: linkErr } = await supabase
       .from("booking_athletes")
       .insert(rows);
-    if (linkErr) return { error: linkErr.message, id: bookingId };
+    if (linkErr) return { error: linkErr.message, id };
   }
 
-  return { error: null, id: bookingId };
+  return { error: null, id };
 }
