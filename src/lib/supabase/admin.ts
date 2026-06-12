@@ -1,0 +1,17 @@
+import { createClient } from "@supabase/supabase-js";
+
+// Service-role Supabase client for server-only contexts (webhooks, background
+// jobs) that must read/write regardless of RLS and have no user session.
+// NEVER import this into a client component or expose the key to the browser.
+export function createAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
