@@ -40,6 +40,8 @@ const LANES: Lane[] = [
   { key: "9", x: 478, y: 232, num: "9", outdoor: true, candidates: ["lane 9", "bullpen 9", "outdoor 9"] },
 ];
 
+const EMPTY_SET = new Set<string>();
+
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
 function matchId(candidates: string[], assets: Asset[]): string | null {
@@ -54,16 +56,30 @@ function matchId(candidates: string[], assets: Asset[]): string | null {
 export default function FacilityMap({
   assets,
   selectedAssetId,
+  unavailable = EMPTY_SET,
   onSelect,
 }: {
   assets: Asset[];
   selectedAssetId: string;
+  unavailable?: Set<string>;
   onSelect: (assetId: string) => void;
 }) {
   return (
     <div className="nbk-map-wrap">
       <div className="nbk-map-svg-wrap">
         <svg className="nbk-map-svg" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern
+              id="nbkStripe"
+              patternUnits="userSpaceOnUse"
+              width="8"
+              height="8"
+              patternTransform="rotate(45)"
+            >
+              <rect width="8" height="8" className="nbk-stripe-bg" />
+              <line x1="0" y1="0" x2="0" y2="8" className="nbk-stripe-line" />
+            </pattern>
+          </defs>
           <text x={22} y={22} className="nbk-field-label">
             Field 1 · First Half
           </text>
@@ -72,7 +88,7 @@ export default function FacilityMap({
           </text>
 
           {LANES.filter((l) => l.y === 40).map((l) => (
-            <LaneG key={l.key} lane={l} assets={assets} selectedAssetId={selectedAssetId} onSelect={onSelect} />
+            <LaneG key={l.key} lane={l} assets={assets} selectedAssetId={selectedAssetId} unavailable={unavailable} onSelect={onSelect} />
           ))}
 
           <line className="nbk-divider-line" x1={22} y1={206} x2={464} y2={206} strokeDasharray="4 4" />
@@ -84,7 +100,7 @@ export default function FacilityMap({
           </text>
 
           {LANES.filter((l) => l.y === 232).map((l) => (
-            <LaneG key={l.key} lane={l} assets={assets} selectedAssetId={selectedAssetId} onSelect={onSelect} />
+            <LaneG key={l.key} lane={l} assets={assets} selectedAssetId={selectedAssetId} unavailable={unavailable} onSelect={onSelect} />
           ))}
         </svg>
       </div>
@@ -101,6 +117,10 @@ export default function FacilityMap({
         <span className="nbk-lg nbk-lg-outdoor">
           <span className="nbk-lg-swatch" />
           Outdoor
+        </span>
+        <span className="nbk-lg nbk-lg-booked">
+          <span className="nbk-lg-swatch" />
+          Booked
         </span>
         <span className="nbk-lg nbk-lg-disabled">
           <span className="nbk-lg-swatch" />
@@ -146,6 +166,16 @@ export default function FacilityMap({
         .nbk-lane.nbk-lane-disabled:hover .nbk-lane-rect{fill:var(--bg);stroke:var(--line);stroke-width:1.5;}
         .nbk-lane-disabled .nbk-lane-num,.nbk-lane-disabled .nbk-lane-status{fill:var(--muted);opacity:.6;}
 
+        .nbk-stripe-bg{fill:var(--line);}
+        .nbk-stripe-line{stroke:var(--line-2);stroke-width:2;}
+        .nbk-lane-booked{cursor:not-allowed;}
+        .nbk-lane.nbk-lane-booked .nbk-lane-rect{fill:url(#nbkStripe);stroke:var(--line-2);stroke-width:1.5;}
+        .nbk-lane.nbk-lane-booked:hover .nbk-lane-rect{fill:url(#nbkStripe);stroke:var(--line-2);stroke-width:1.5;}
+        .nbk-lane-booked .nbk-lane-num,.nbk-lane-booked .nbk-lane-status{fill:var(--muted);opacity:.7;}
+        .nbk-lane-booked .nbk-equip-tag{fill:rgba(58,63,77,.08);}
+        .nbk-lane-booked .nbk-equip-tag-text{fill:var(--muted);}
+        .nbk-lg-booked .nbk-lg-swatch{background:repeating-linear-gradient(45deg,var(--line),var(--line) 3px,var(--line-2) 3px,var(--line-2) 6px);border:1.5px solid var(--line-2);}
+
         .nbk-selected-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;}
         .nbk-selected-eyebrow{font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:0.12em;color:var(--accent);}
         .nbk-selected-title{font-family:var(--fd);font-weight:800;font-size:16px;color:var(--text);margin-top:3px;}
@@ -162,26 +192,30 @@ function LaneG({
   lane,
   assets,
   selectedAssetId,
+  unavailable,
   onSelect,
 }: {
   lane: Lane;
   assets: Asset[];
   selectedAssetId: string;
+  unavailable: Set<string>;
   onSelect: (assetId: string) => void;
 }) {
   const id = matchId(lane.candidates, assets);
   const disabled = id == null;
-  const selected = id != null && id === selectedAssetId;
+  const booked = id != null && unavailable.has(id);
+  const selected = id != null && id === selectedAssetId && !booked;
 
   const cls =
     "nbk-lane" +
     (lane.gym ? " nbk-lane-gym" : "") +
     (lane.outdoor ? " nbk-lane-outdoor" : "") +
     (selected ? " nbk-selected" : "") +
+    (booked ? " nbk-lane-booked" : "") +
     (disabled ? " nbk-lane-disabled" : "");
 
   return (
-    <g className={cls} onClick={() => id && onSelect(id)}>
+    <g className={cls} onClick={() => id && !booked && onSelect(id)}>
       <rect className="nbk-lane-rect" x={lane.x} y={lane.y} width={100} height={150} rx={6} />
       <text className={"nbk-lane-num" + (lane.small ? " nbk-lane-num-sm" : "")} x={lane.x + 18} y={lane.y + 32}>
         {lane.num}
@@ -194,9 +228,9 @@ function LaneG({
           </text>
         </g>
       ))}
-      {disabled && (
+      {(booked || disabled) && (
         <text className="nbk-lane-status" x={lane.x + 18} y={lane.y + 142}>
-          Not set up
+          {booked ? "Booked" : "Not set up"}
         </text>
       )}
     </g>
