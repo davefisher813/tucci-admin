@@ -1,12 +1,19 @@
-export default function Page() {
-  return (
-    <div className="mx-auto max-w-[1180px]">
-      <div className="rounded-[16px] border border-dashed border-line-2 bg-paper p-10 text-center text-muted">
-        <b className="mb-[5px] block font-display text-[16px] text-text">
-          Promo Codes
-        </b>
-        Screen not yet wired. Scaffold placeholder.
-      </div>
-    </div>
-  );
+import { createClient } from "@/lib/supabase/server";
+import PromoManager, { type PromoRow } from "@/components/admin/PromoManager";
+
+export const dynamic = "force-dynamic";
+
+export default async function PromoCodesPage() {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("promo_codes")
+    .select(
+      "id, code, discount_type, value, max_uses, used_count, valid_from, valid_to, is_active, notes"
+    )
+    .order("created_at", { ascending: false });
+
+  const promos = (data as PromoRow[]) ?? [];
+
+  return <PromoManager promos={promos} />;
 }
