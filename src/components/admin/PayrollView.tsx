@@ -181,4 +181,12 @@ function StatCard({
         {label}
       </div>
       <div
-        className={`tnum font
+        className={`tnum font-display text-[24px] font-extrabold tracking-[-.02em] ${
+          accent ? "text-accent" : "text-text"
+        }`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
