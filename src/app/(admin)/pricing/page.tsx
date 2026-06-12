@@ -1,12 +1,9 @@
-export default function Page() {
-  return (
-    <div className="mx-auto max-w-[1180px]">
-      <div className="rounded-[16px] border border-dashed border-line-2 bg-paper p-10 text-center text-muted">
-        <b className="mb-[5px] block font-display text-[16px] text-text">
-          Pricing
-        </b>
-        Screen not yet wired. Scaffold placeholder.
-      </div>
-    </div>
-  );
+import { getServices } from "@/lib/data/resources";
+import PricingManager from "@/components/admin/PricingManager";
+
+export const dynamic = "force-dynamic";
+
+export default async function PricingPage() {
+  const services = await getServices();
+  return <PricingManager services={services} />;
 }
