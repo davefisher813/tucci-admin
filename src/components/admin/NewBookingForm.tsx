@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { moneyExact } from "@/lib/format";
 import { createBooking } from "@/lib/data/booking-actions";
@@ -12,6 +12,10 @@ import type {
   Service,
 } from "@/lib/data/resources";
 import FacilityMap from "@/components/admin/FacilityMap";
+import {
+  getDayBookings,
+  type DayBooking,
+} from "@/lib/data/availability-actions";
 
 const BOOKING_TYPES = [
   "lesson",
@@ -59,6 +63,8 @@ export default function NewBookingForm({
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [dayBookings, setDayBookings] = useState<DayBooking[]>([]);
+  const [coverage, setCoverage] = useState<Record<string, string[]>>({});
 
   const service = useMemo(
     () => services.find((s) => s.id === serviceId) ?? null,
@@ -74,6 +80,74 @@ export default function NewBookingForm({
   const totalCents = Math.round(baseCents * durationHours);
   const selectedAsset = assets.find((a) => a.id === assetId) ?? null;
   const splittable = selectedAsset?.is_splittable ?? false;
+
+  useEffect(() => {
+    let active = true;
+    getDayBookings(date).then((res) => {
+      if (!active) return;
+      setDayBookings(res.bookings);
+      setCoverage(res.coverage);
+    });
+    return () => {
+      active = false;
+    };
+  }, [date]);
+
+  const unavailable = useMemo(() => {
+    const winStart = new Date(`${date}T00:00:00`);
+    winStart.setHours(startHour, 0, 0, 0);
+    const winEnd = new Date(winStart.getTime() + durationHours * 3600 * 1000);
+    const overlapping = dayBookings.filter((b) => {
+      const bs = new Date(b.start_time).getTime();
+      const be = new Date(b.end_time).getTime();
+      return bs < winEnd.getTime() && be > winStart.getTime();
+    });
+
+    const wholeSet = new Set<string>();
+    const halfMap = new Map<string, Set<number>>();
+    const occupied = new Set<string>();
+    for (const b of overlapping) {
+      occupied.add(b.asset_id);
+      if (b.half_slot == null) {
+        wholeSet.add(b.asset_id);
+      } else {
+        const hs = halfMap.get(b.asset_id) ?? new Set<number>();
+        hs.add(b.half_slot);
+        halfMap.set(b.asset_id, hs);
+      }
+    }
+
+    const out = new Set<string>();
+    for (const a of assets) {
+      const halves = halfMap.get(a.id);
+      const selfFull =
+        wholeSet.has(a.id) || (!!halves && halves.has(1) && halves.has(2));
+
+      let coveredByOccupiedField = false;
+      for (const [field, cages] of Object.entries(coverage)) {
+        if (cages.includes(a.id) && occupied.has(field)) {
+          coveredByOccupiedField = true;
+          break;
+        }
+      }
+
+      let fieldWithOccupiedCage = false;
+      const myCages = coverage[a.id];
+      if (myCages) {
+        for (const c of myCages) {
+          if (occupied.has(c)) {
+            fieldWithOccupiedCage = true;
+            break;
+          }
+        }
+      }
+
+      if (selfFull || coveredByOccupiedField || fieldWithOccupiedCage) {
+        out.add(a.id);
+      }
+    }
+    return out;
+  }, [dayBookings, coverage, date, startHour, durationHours, assets]);
 
   function toggleAthlete(id: string) {
     setAthleteIds((prev) =>
@@ -145,6 +219,7 @@ export default function NewBookingForm({
             <FacilityMap
               assets={assets}
               selectedAssetId={assetId}
+              unavailable={unavailable}
               onSelect={(id) => {
                 setAssetId(id);
                 setWantHalf(false);
