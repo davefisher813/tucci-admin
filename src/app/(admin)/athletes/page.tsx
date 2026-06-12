@@ -1,12 +1,27 @@
-export default function Page() {
-  return (
-    <div className="mx-auto max-w-[1180px]">
-      <div className="rounded-[16px] border border-dashed border-line-2 bg-paper p-10 text-center text-muted">
-        <b className="mb-[5px] block font-display text-[16px] text-text">
-          Athletes
-        </b>
-        Screen not yet wired. Scaffold placeholder.
-      </div>
-    </div>
-  );
+import { createClient } from "@/lib/supabase/server";
+import AthletesManager, {
+  type AthleteRow,
+  type FamilyRow,
+} from "@/components/admin/AthletesManager";
+
+export const dynamic = "force-dynamic";
+
+export default async function AthletesPage() {
+  const supabase = await createClient();
+
+  const [{ data: athData }, { data: famData }] = await Promise.all([
+    supabase
+      .from("athletes")
+      .select(
+        "id, family_id, first_name, last_name, preferred_name, position, grade, school, bats, throws"
+      )
+      .eq("is_active", true)
+      .order("last_name", { ascending: true }),
+    supabase.from("families").select("id, family_name").eq("is_active", true),
+  ]);
+
+  const athletes = (athData as AthleteRow[]) ?? [];
+  const families = (famData as FamilyRow[]) ?? [];
+
+  return <AthletesManager athletes={athletes} families={families} />;
 }
