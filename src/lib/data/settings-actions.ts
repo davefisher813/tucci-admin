@@ -37,11 +37,26 @@ export async function createAsset(input: {
     .insert({ label: "Z: " + assetId })
     .select("id")
     .single();
-  if (zErr) return { error: null };
+  if (zErr) {
+    return {
+      error:
+        "Space was created, but its double-booking protection did not finish setting up. Re-open the space and save again, or remove and recreate it. (" +
+        zErr.message +
+        ")",
+    };
+  }
   const zoneId = (z as { id: string }).id;
-  await supabase
+  const { error: azErr } = await supabase
     .from("asset_zones")
     .insert({ asset_id: assetId, zone_id: zoneId, ord: 0 });
+  if (azErr) {
+    return {
+      error:
+        "Space was created, but linking its double-booking protection failed. Re-open the space and save again. (" +
+        azErr.message +
+        ")",
+    };
+  }
 
   return { error: null };
 }
