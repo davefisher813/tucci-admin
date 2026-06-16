@@ -22,9 +22,10 @@ export async function setUserRole(input: {
       .eq("user_id", input.user_id)
       .maybeSingle();
     if (!existing) {
-      await supabase
+      const { error: profErr } = await supabase
         .from("coach_profiles")
         .insert({ user_id: input.user_id, tier: "t3" });
+      if (profErr) return { error: profErr.message };
     }
   }
   return { error: null };
