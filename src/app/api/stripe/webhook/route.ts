@@ -168,23 +168,65 @@ const SUB_STATUS: Record<
   paused: "paused",
 };
 
+// Planned tier prices (snapshot stored on the membership row at signup).
+const TIER_PRICE_CENTS: Record<string, number> = {
+  monthly: 19900,
+  family: 29900,
+  team: 59900,
+};
+
+function epochToDate(v: unknown): string | null {
+  // memberships period columns are DATE; Stripe sends unix seconds.
+  return typeof v === "number"
+    ? new Date(v * 1000).toISOString().slice(0, 10)
+    : null;
+}
+
 async function syncSubscription(supabase: DB, sub: Record<string, unknown>) {
   const subId = sub.id as string;
-  const update: Record<string, unknown> = {
-    cancel_at_period_end: Boolean(sub.cancel_at_period_end),
-  };
-  const periodEnd = sub.current_period_end as number | undefined;
-  if (periodEnd) {
-    // memberships.current_period_end is a DATE column.
-    update.current_period_end = new Date(periodEnd * 1000)
-      .toISOString()
-      .slice(0, 10);
-  }
-  const mapped = SUB_STATUS[sub.status as string];
-  if (mapped) update.status = mapped;
+  const status = SUB_STATUS[sub.status as string] ?? "active";
+  const periodStart = epochToDate(sub.current_period_start);
+  const periodEnd = epochToDate(sub.current_period_end);
+  const cancelAtEnd = Boolean(sub.cancel_at_period_end);
 
-  await supabase
+  const { data: existing } = await supabase
     .from("memberships")
-    .update(update)
-    .eq("stripe_subscription_id", subId);
+    .select("id")
+    .eq("stripe_subscription_id", subId)
+    .maybeSingle();
+
+  if (existing) {
+    const update: Record<string, unknown> = {
+      status,
+      cancel_at_period_end: cancelAtEnd,
+    };
+    if (periodStart) update.current_period_start = periodStart;
+    if (periodEnd) update.current_period_end = periodEnd;
+    if (status === "cancelled") update.cancelled_at = new Date().toISOString();
+    await supabase
+      .from("memberships")
+      .update(update)
+      .eq("id", (existing as { id: string }).id);
+    return;
+  }
+
+  // New subscription: insert a membership row only if the subscription metadata
+  // identifies the family and tier (set when we create the Checkout session).
+  const metadata = (sub.metadata ?? {}) as Record<string, string>;
+  const familyId = metadata.family_id;
+  const tier = metadata.tier;
+  if (!familyId || !tier || !(tier in TIER_PRICE_CENTS)) return;
+
+  await supabase.from("memberships").insert({
+    family_id: familyId,
+    tier,
+    status,
+    monthly_price_cents: TIER_PRICE_CENTS[tier],
+    stripe_subscription_id: subId,
+    stripe_customer_id: (sub.customer as string) ?? null,
+    started_at: new Date().toISOString().slice(0, 10),
+    current_period_start: periodStart,
+    current_period_end: periodEnd,
+    cancel_at_period_end: cancelAtEnd,
+  });
 }
