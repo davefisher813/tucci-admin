@@ -92,10 +92,17 @@ export async function getOrCreateStripeCustomer(
     `customer_${familyId}`
   );
 
-  await supabase
+  const { error: saveErr } = await supabase
     .from("families")
     .update({ stripe_customer_id: customer.id })
     .eq("id", familyId);
+  if (saveErr) {
+    throw new Error(
+      "Created the Stripe customer but could not save it. Please try again. (" +
+        saveErr.message +
+        ")"
+    );
+  }
 
   return customer.id;
 }
