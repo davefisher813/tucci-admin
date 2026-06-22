@@ -182,3 +182,88 @@ export async function cancelSeries(
   if (error) return { cancelled: 0, error: error.message };
   return { cancelled: (data ?? []).length, error: null };
 }
+
+export type SeriesInfo = {
+  groupId: string | null;
+  total: number;
+  future: { id: string; start_time: string }[];
+};
+
+// Looks up whether a booking belongs to a recurring series, and lists the
+// series members at or after this booking's start ("this and all future").
+export async function getSeriesInfo(bookingId: string): Promise<SeriesInfo> {
+  const supabase = await createClient();
+  const { data: b } = await supabase
+    .from("bookings")
+    .select("recurrence_group_id, start_time")
+    .eq("id", bookingId)
+    .maybeSingle();
+  const row = b as
+    | { recurrence_group_id: string | null; start_time: string }
+    | null;
+  const groupId = row?.recurrence_group_id ?? null;
+  const startTime = row?.start_time ?? null;
+  if (!groupId) return { groupId: null, total: 1, future: [] };
+
+  const { data: members } = await supabase
+    .from("bookings")
+    .select("id, start_time")
+    .eq("recurrence_group_id", groupId)
+    .neq("status", "cancelled")
+    .order("start_time", { ascending: true });
+  const all = (members as { id: string; start_time: string }[] | null) ?? [];
+  const future = startTime ? all.filter((m) => m.start_time >= startTime) : all;
+  return { groupId, total: all.length, future };
+}
+
+export type BookingUpdate = {
+  id: string;
+  asset_id?: string;
+  coach_id?: string | null;
+  service_id?: string | null;
+  start_time?: string;
+  end_time?: string;
+};
+
+// Applies per-booking patches one at a time, catching conflicts (a moved time
+// or reassigned coach can collide) and reporting which were skipped.
+export async function updateManyBookings(
+  updates: BookingUpdate[]
+): Promise<{
+  updated: number;
+  skipped: { id: string; reason: string }[];
+  error: string | null;
+}> {
+  if (updates.length === 0) return { updated: 0, skipped: [], error: null };
+  const supabase = await createClient();
+  let updated = 0;
+  const skipped: { id: string; reason: string }[] = [];
+
+  for (const u of updates) {
+    const patch: Record<string, unknown> = {};
+    if (u.asset_id !== undefined) patch.asset_id = u.asset_id;
+    if (u.coach_id !== undefined) patch.coach_id = u.coach_id;
+    if (u.service_id !== undefined) patch.service_id = u.service_id;
+    if (u.start_time !== undefined) patch.start_time = u.start_time;
+    if (u.end_time !== undefined) patch.end_time = u.end_time;
+    if (Object.keys(patch).length === 0) continue;
+
+    const { error } = await supabase
+      .from("bookings")
+      .update(patch)
+      .eq("id", u.id);
+    if (error) {
+      skipped.push({
+        id: u.id,
+        reason: isConflict(error.message)
+          ? isCoachConflict(error.message)
+            ? "coach busy"
+            : "conflict"
+          : error.message,
+      });
+      continue;
+    }
+    updated++;
+  }
+  return { updated, skipped, error: null };
+}
