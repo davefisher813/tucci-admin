@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { moneyExact } from "@/lib/format";
 import { updateBooking, cancelBooking } from "@/lib/data/booking-actions";
+import {
+  getSeriesInfo,
+  updateManyBookings,
+  cancelSeries,
+  type SeriesInfo,
+  type BookingUpdate,
+} from "@/lib/data/bulk-booking-actions";
 import type { Asset, Coach, Service } from "@/lib/data/resources";
 
 export type EditableBooking = {
@@ -48,16 +55,79 @@ export default function EditBookingModal({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const [series, setSeries] = useState<SeriesInfo | null>(null);
+  const [scope, setScope] = useState<"this" | "future">("this");
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getSeriesInfo(booking.id).then((s) => {
+      if (active) setSeries(s);
+    });
+    return () => {
+      active = false;
+    };
+  }, [booking.id]);
+
+  const inSeries = !!series?.groupId && series.total > 1;
+  const applyFuture = inSeries && scope === "future";
+
   async function save() {
     setBusy(true);
     setErr(null);
+    const startISO = new Date(start).toISOString();
+    const endISO = new Date(end).toISOString();
+
+    if (applyFuture && series) {
+      const ns = new Date(start);
+      const sh = ns.getHours();
+      const sm = ns.getMinutes();
+      const durMs = new Date(end).getTime() - new Date(start).getTime();
+      const timeChanged =
+        startISO !== new Date(booking.start_time).toISOString() ||
+        endISO !== new Date(booking.end_time).toISOString();
+
+      const updates: BookingUpdate[] = series.future.map((f) => {
+        const u: BookingUpdate = { id: f.id };
+        if (assetId !== booking.asset_id) u.asset_id = assetId;
+        if ((coachId || null) !== booking.coach_id) u.coach_id = coachId || null;
+        if ((serviceId || null) !== booking.service_id)
+          u.service_id = serviceId || null;
+        if (timeChanged) {
+          const d = new Date(f.start_time);
+          const s2 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, sm, 0, 0);
+          const e2 = new Date(s2.getTime() + durMs);
+          u.start_time = s2.toISOString();
+          u.end_time = e2.toISOString();
+        }
+        return u;
+      });
+
+      const res = await updateManyBookings(updates);
+      setBusy(false);
+      if (res.error) {
+        setErr(res.error);
+        return;
+      }
+      if (res.skipped.length > 0) {
+        setErr(
+          `Updated ${res.updated}, skipped ${res.skipped.length} (conflict). The rest are saved.`
+        );
+        router.refresh();
+        return;
+      }
+      router.refresh();
+      onClose();
+      return;
+    }
+
     const res = await updateBooking({
       id: booking.id,
       asset_id: assetId,
       coach_id: coachId || null,
       service_id: serviceId || null,
-      start_time: new Date(start).toISOString(),
-      end_time: new Date(end).toISOString(),
+      start_time: startISO,
+      end_time: endISO,
     });
     setBusy(false);
     if (res.error) {
@@ -71,6 +141,17 @@ export default function EditBookingModal({
   async function doCancel() {
     setBusy(true);
     setErr(null);
+    if (applyFuture && series?.groupId) {
+      const res = await cancelSeries(series.groupId, booking.start_time);
+      setBusy(false);
+      if (res.error) {
+        setErr(res.error);
+        return;
+      }
+      router.refresh();
+      onClose();
+      return;
+    }
     const res = await cancelBooking(booking.id);
     setBusy(false);
     if (res.error) {
@@ -81,21 +162,69 @@ export default function EditBookingModal({
     onClose();
   }
 
+  function duplicate() {
+    const d = new Date(booking.start_time);
+    const durH =
+      (new Date(booking.end_time).getTime() -
+        new Date(booking.start_time).getTime()) /
+      3600000;
+    const p = new URLSearchParams({
+      date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}-${String(d.getDate()).padStart(2, "0")}`,
+      asset: booking.asset_id,
+      hour: String(d.getHours()),
+      dur: String(durH),
+    });
+    if (booking.service_id) p.set("service", booking.service_id);
+    if (booking.coach_id) p.set("coach", booking.coach_id);
+    router.push(`/new-booking?${p.toString()}`);
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-[16px] border border-line bg-paper p-6"
+        className="max-h-[92vh] w-full max-w-md overflow-auto rounded-[16px] border border-line bg-paper p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 font-display text-[10px] font-extrabold tracking-[.02em] text-accent">
           Booking {booking.booking_number ? `#${booking.booking_number}` : ""}
         </div>
-        <div className="mb-4 font-display text-[20px] font-extrabold text-text">
+        <div className="mb-3 font-display text-[20px] font-extrabold text-text">
           {booking.who}
         </div>
+
+        {inSeries && (
+          <div className="mb-4 rounded-[10px] border border-accent/30 bg-accent/[.06] p-3">
+            <div className="mb-2 font-display text-[12px] font-extrabold text-accent">
+              Part of a recurring series · {series?.total} bookings
+            </div>
+            <div className="flex rounded-[8px] border border-line-2 bg-paper">
+              <button
+                type="button"
+                onClick={() => setScope("this")}
+                className={`flex-1 rounded-[7px] px-2 py-[7px] font-display text-[11px] font-extrabold ${
+                  scope === "this" ? "bg-ink text-white" : "text-muted"
+                }`}
+              >
+                This booking
+              </button>
+              <button
+                type="button"
+                onClick={() => setScope("future")}
+                className={`flex-1 rounded-[7px] px-2 py-[7px] font-display text-[11px] font-extrabold ${
+                  scope === "future" ? "bg-ink text-white" : "text-muted"
+                }`}
+              >
+                This + all future ({series?.future.length})
+              </button>
+            </div>
+          </div>
+        )}
 
         {err && (
           <div className="mb-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[13px] text-danger">
@@ -163,6 +292,12 @@ export default function EditBookingModal({
               />
             </Field>
           </div>
+          {applyFuture && (
+            <p className="text-[11.5px] text-muted">
+              Time changes re-apply to each future date; space, service, and
+              coach changes apply to all future bookings.
+            </p>
+          )}
           <div className="flex items-center justify-between border-t border-line pt-3">
             <span className="text-[12px] text-muted">Total</span>
             <span className="tnum font-display text-[15px] font-extrabold text-text">
@@ -171,28 +306,55 @@ export default function EditBookingModal({
           </div>
         </div>
 
-        <div className="mt-5 flex items-center gap-[9px]">
+        <div className="mt-5 flex flex-wrap items-center gap-[9px]">
           <button
             onClick={save}
             disabled={busy}
             className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
           >
-            Save
+            {busy ? "Saving…" : "Save"}
+          </button>
+          <button
+            onClick={duplicate}
+            disabled={busy}
+            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] text-text hover:border-accent disabled:opacity-50"
+          >
+            Duplicate
           </button>
           <button
             onClick={onClose}
             disabled={busy}
-            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-text hover:border-accent"
+            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] text-text hover:border-accent disabled:opacity-50"
           >
             Close
           </button>
-          <button
-            onClick={doCancel}
-            disabled={busy || booking.status === "cancelled"}
-            className="ml-auto inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-danger hover:border-danger disabled:opacity-40"
-          >
-            Cancel Booking
-          </button>
+
+          {confirmCancel ? (
+            <div className="ml-auto flex items-center gap-[6px]">
+              <button
+                onClick={doCancel}
+                disabled={busy}
+                className="inline-flex h-10 items-center rounded-[9px] border border-danger bg-danger px-[12px] font-display text-[11px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+              >
+                {applyFuture ? "Cancel series" : "Confirm"}
+              </button>
+              <button
+                onClick={() => setConfirmCancel(false)}
+                disabled={busy}
+                className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[12px] font-display text-[11px] font-extrabold tracking-[.03em] text-text"
+              >
+                Keep
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmCancel(true)}
+              disabled={busy || booking.status === "cancelled"}
+              className="ml-auto inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-danger hover:border-danger disabled:opacity-40"
+            >
+              {applyFuture ? "Cancel Series" : "Cancel Booking"}
+            </button>
+          )}
         </div>
       </div>
       <style>{`
