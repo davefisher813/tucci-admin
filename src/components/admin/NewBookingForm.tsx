@@ -136,8 +136,13 @@ export default function NewBookingForm({
   const [assetIds, setAssetIds] = useState<Set<string>>(
     new Set(initialAsset ? [initialAsset] : [])
   );
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
-  const [coachId, setCoachId] = useState("");
+  const initialService = params.get("service");
+  const [serviceId, setServiceId] = useState(
+    initialService && services.some((s) => s.id === initialService)
+      ? initialService
+      : services[0]?.id ?? ""
+  );
+  const [coachId, setCoachId] = useState(params.get("coach") ?? "");
   const [familyId, setFamilyId] = useState("");
   const [athleteIds, setAthleteIds] = useState<string[]>([]);
 
@@ -154,7 +159,10 @@ export default function NewBookingForm({
       ? `${String(Number(initialHour)).padStart(2, "0")}:00`
       : "16:00"
   );
-  const [durationHours, setDurationHours] = useState(1);
+  const initialDur = params.get("dur");
+  const [durationHours, setDurationHours] = useState(
+    initialDur ? Number(initialDur) : 1
+  );
   const [wantHalf, setWantHalf] = useState(initialHalf);
 
   const [busy, setBusy] = useState(false);
