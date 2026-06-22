@@ -162,4 +162,75 @@ export default function FacilityMap({
         .nbk-lane-disabled{cursor:not-allowed;}
         .nbk-lane-disabled .nbk-lane-rect{fill:var(--bg);stroke:var(--line);opacity:.55;}
         .nbk-lane.nbk-lane-disabled:hover .nbk-lane-rect{fill:var(--bg);stroke:var(--line);stroke-width:1.5;}
-        .nbk-lane-disabled
+        .nbk-lane-disabled .nbk-lane-num,.nbk-lane-disabled .nbk-lane-status{fill:var(--muted);opacity:.6;}
+
+        .nbk-stripe-bg{fill:var(--line);}
+        .nbk-stripe-line{stroke:var(--line-2);stroke-width:2;}
+        .nbk-lane-booked{cursor:not-allowed;}
+        .nbk-lane.nbk-lane-booked .nbk-lane-rect{fill:url(#nbkStripe);stroke:var(--line-2);stroke-width:1.5;}
+        .nbk-lane.nbk-lane-booked:hover .nbk-lane-rect{fill:url(#nbkStripe);stroke:var(--line-2);stroke-width:1.5;}
+        .nbk-lane-booked .nbk-lane-num,.nbk-lane-booked .nbk-lane-status{fill:var(--muted);opacity:.7;}
+        .nbk-lane-booked .nbk-equip-tag{fill:rgba(58,63,77,.08);}
+        .nbk-lane-booked .nbk-equip-tag-text{fill:var(--muted);}
+        .nbk-lg-booked .nbk-lg-swatch{background:repeating-linear-gradient(45deg,var(--line),var(--line) 3px,var(--line-2) 3px,var(--line-2) 6px);border:1.5px solid var(--line-2);}
+
+        .nbk-selected-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;}
+        .nbk-selected-eyebrow{font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:0.12em;color:var(--accent);}
+        .nbk-selected-title{font-family:var(--fd);font-weight:800;font-size:16px;color:var(--text);margin-top:3px;}
+        .nbk-selected-meta{font-family:var(--fs);font-size:12px;font-weight:500;color:var(--muted);margin-top:3px;}
+        .nbk-size-toggle{display:flex;width:100%;border:1px solid var(--line-2);border-radius:9px;overflow:hidden;}
+        .nbk-size-btn{flex:1;padding:8px;font-family:var(--fd);font-weight:700;font-size:12px;background:var(--paper);color:var(--muted);border:none;cursor:pointer;transition:background .15s,color .15s;}
+        .nbk-size-btn.on{background:var(--sky);color:#0A0A0A;}
+      `}</style>
+    </div>
+  );
+}
+
+function LaneG({
+  lane,
+  assets,
+  selectedIds,
+  unavailable,
+  onToggle,
+}: {
+  lane: Lane;
+  assets: Asset[];
+  selectedIds: Set<string>;
+  unavailable: Set<string>;
+  onToggle: (assetId: string) => void;
+}) {
+  const id = matchId(lane.candidates, assets);
+  const disabled = id == null;
+  const booked = id != null && unavailable.has(id);
+  const selected = id != null && selectedIds.has(id) && !booked;
+
+  const cls =
+    "nbk-lane" +
+    (lane.gym ? " nbk-lane-gym" : "") +
+    (lane.outdoor ? " nbk-lane-outdoor" : "") +
+    (selected ? " nbk-selected" : "") +
+    (booked ? " nbk-lane-booked" : "") +
+    (disabled ? " nbk-lane-disabled" : "");
+
+  return (
+    <g className={cls} onClick={() => id && !booked && onToggle(id)}>
+      <rect className="nbk-lane-rect" x={lane.x} y={lane.y} width={100} height={150} rx={6} />
+      <text className={"nbk-lane-num" + (lane.small ? " nbk-lane-num-sm" : "")} x={lane.x + 18} y={lane.y + 32}>
+        {lane.num}
+      </text>
+      {lane.equip?.map((tag, ti) => (
+        <g key={ti}>
+          <rect className="nbk-equip-tag" x={lane.x + 18} y={lane.y + 44 + ti * 18} width={tag.w} height={14} rx={3} />
+          <text className="nbk-equip-tag-text" x={lane.x + 25} y={lane.y + 54 + ti * 18}>
+            {tag.text}
+          </text>
+        </g>
+      ))}
+      {(booked || disabled) && (
+        <text className="nbk-lane-status" x={lane.x + 18} y={lane.y + 142}>
+          {booked ? "Booked" : "Not set up"}
+        </text>
+      )}
+    </g>
+  );
+}
