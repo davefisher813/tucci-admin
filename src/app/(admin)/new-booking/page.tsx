@@ -6,18 +6,21 @@ import {
   getFamilies,
   getServices,
 } from "@/lib/data/resources";
+import { getBookingTypes } from "@/lib/data/booking-type-actions";
 import NewBookingForm from "@/components/admin/NewBookingForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewBookingPage() {
-  const [assets, services, coaches, families, athletes] = await Promise.all([
-    getAssets(),
-    getServices(),
-    getCoaches(),
-    getFamilies(),
-    getAthletes(),
-  ]);
+  const [assets, services, coaches, families, athletes, bookingTypes] =
+    await Promise.all([
+      getAssets(),
+      getServices(),
+      getCoaches(),
+      getFamilies(),
+      getAthletes(),
+      getBookingTypes(),
+    ]);
 
   if (assets.length === 0 || services.length === 0) {
     return (
@@ -40,6 +43,7 @@ export default async function NewBookingPage() {
         coaches={coaches}
         families={families}
         athletes={athletes}
+        bookingTypes={bookingTypes}
       />
     </Suspense>
   );
