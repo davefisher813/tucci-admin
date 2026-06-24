@@ -26,6 +26,7 @@ export type GridBooking = {
   start_hour: number;
   end_hour: number;
   half_slot: number | null;
+  booking_type?: string | null;
 };
 
 const START_HOUR = 8;
@@ -68,6 +69,19 @@ export default function ScheduleGrid({
   const router = useRouter();
   const [editing, setEditing] = useState<EditableBooking | null>(null);
 
+  // Multi-select (desktop): drag across empty cells, or tap one.
+  const [sel, setSel] = useState<Set<string>>(new Set()); // `${assetId}@${hour}`
+  const dragging = useRef(false);
+  const anchor = useRef<{ c: number; r: number } | null>(null);
+  const moved = useRef(false);
+  useEffect(() => {
+    const up = () => {
+      dragging.current = false;
+    };
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, []);
+
   const hours: number[] = [];
   for (let h = START_HOUR; h <= END_HOUR; h++) hours.push(h);
 
@@ -107,6 +121,73 @@ export default function ScheduleGrid({
     });
     if (portion) params.set("portion", portion);
     return `/new-booking?${params.toString()}`;
+  }
+
+  const colOf = (aid: string) => assets.findIndex((a) => a.id === aid);
+  const isOpen = (aid: string, h: number) =>
+    !cellMap.has(`${aid}@${h}`) && !blocked.has(`${aid}@${h}`);
+
+  function rectSet(a: { c: number; r: number }, b: { c: number; r: number }) {
+    const c0 = Math.min(a.c, b.c),
+      c1 = Math.max(a.c, b.c),
+      r0 = Math.min(a.r, b.r),
+      r1 = Math.max(a.r, b.r);
+    const s = new Set<string>();
+    for (let c = c0; c <= c1; c++) {
+      for (let r = r0; r <= r1; r++) {
+        const aid = assets[c]?.id;
+        const h = START_HOUR + r;
+        if (aid && isOpen(aid, h)) s.add(`${aid}@${h}`);
+      }
+    }
+    return s;
+  }
+
+  function cellDown(aid: string, h: number) {
+    const key = `${aid}@${h}`;
+    if (sel.size === 1 && sel.has(key)) {
+      setSel(new Set());
+      dragging.current = false;
+      anchor.current = null;
+      return;
+    }
+    dragging.current = true;
+    moved.current = false;
+    anchor.current = { c: colOf(aid), r: h - START_HOUR };
+    setSel(new Set([key]));
+  }
+
+  function cellEnter(aid: string, h: number) {
+    if (!dragging.current || !anchor.current) return;
+    moved.current = true;
+    setSel(rectSet(anchor.current, { c: colOf(aid), r: h - START_HOUR }));
+  }
+
+  function selSpaces(): string[] {
+    return assets
+      .filter((a) => [...sel].some((k) => k.startsWith(a.id + "@")))
+      .map((a) => a.name);
+  }
+  function selHourSpan(): { h0: number; dur: number } {
+    const hrs = [...new Set([...sel].map((k) => Number(k.split("@")[1])))].sort(
+      (x, y) => x - y
+    );
+    const h0 = hrs[0] ?? START_HOUR;
+    return { h0, dur: (hrs[hrs.length - 1] ?? h0) + 1 - h0 };
+  }
+  function openForm(block: boolean) {
+    const aids = assets
+      .filter((a) => [...sel].some((k) => k.startsWith(a.id + "@")))
+      .map((a) => a.id);
+    const { h0, dur } = selHourSpan();
+    const p = new URLSearchParams({
+      date,
+      assets: aids.join(","),
+      hour: String(h0),
+      dur: String(dur),
+    });
+    if (block) p.set("block", "1");
+    router.push(`/new-booking?${p.toString()}`);
   }
 
   function railClass(status: string): string {
@@ -161,6 +242,9 @@ export default function ScheduleGrid({
                 blocked={blocked}
                 splittable={splittable}
                 railClass={railClass}
+                sel={sel}
+                onCellDown={cellDown}
+                onCellEnter={cellEnter}
                 onEdit={(b) => setEditing(toEditable(b))}
                 onCreate={(assetId, portion) =>
                   router.push(newBookingHref(assetId, h, portion))
@@ -170,6 +254,43 @@ export default function ScheduleGrid({
           </div>
         </div>
       </div>
+
+      {sel.size > 0 && (
+        <div className="fixed bottom-5 left-1/2 z-40 hidden w-[min(640px,92vw)] -translate-x-1/2 items-center gap-3 rounded-[14px] border border-line-2 bg-paper px-4 py-3 shadow-2xl md:flex">
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-[14.5px] font-extrabold text-text">
+              {sel.size} slot{sel.size === 1 ? "" : "s"}
+            </div>
+            <div className="truncate text-[12px] text-muted">
+              {(() => {
+                const sp = selSpaces();
+                const { h0, dur } = selHourSpan();
+                const spaceTxt =
+                  sp.length <= 2 ? sp.join(", ") : `${sp.length} spaces`;
+                return `${spaceTxt} · ${hourLabel(h0)}–${hourLabel(h0 + dur)}`;
+              })()}
+            </div>
+          </div>
+          <button
+            onClick={() => setSel(new Set())}
+            className="px-2 font-display text-[12px] font-bold text-muted hover:text-text"
+          >
+            Clear
+          </button>
+          <button
+            onClick={() => openForm(true)}
+            className="h-10 rounded-[10px] border border-line-2 bg-paper px-[14px] font-display text-[12px] font-extrabold tracking-[.02em] text-text hover:border-accent"
+          >
+            Block Off
+          </button>
+          <button
+            onClick={() => openForm(false)}
+            className="h-10 rounded-[10px] border border-ink bg-ink px-[14px] font-display text-[12px] font-extrabold tracking-[.02em] text-white"
+          >
+            New Booking
+          </button>
+        </div>
+      )}
 
       {/* Phone: agenda */}
       <div className="md:hidden">
@@ -201,6 +322,9 @@ function RowFragment({
   blocked,
   splittable,
   railClass,
+  sel,
+  onCellDown,
+  onCellEnter,
   onEdit,
   onCreate,
 }: {
@@ -210,6 +334,9 @@ function RowFragment({
   blocked: Map<string, string>;
   splittable: Map<string, boolean | undefined>;
   railClass: (s: string) => string;
+  sel: Set<string>;
+  onCellDown: (assetId: string, hour: number) => void;
+  onCellEnter: (assetId: string, hour: number) => void;
   onEdit: (b: GridBooking) => void;
   onCreate: (assetId: string, portion?: "half") => void;
 }) {
@@ -249,9 +376,20 @@ function RowFragment({
               </div>
             ) : (
               <button
-                onClick={() => onCreate(a.id)}
-                aria-label={`Book ${a.name} at ${hourLabel(hour)}`}
-                className="h-full w-full transition-colors hover:bg-sky/[.08]"
+                onMouseDown={() => onCellDown(a.id, hour)}
+                onMouseEnter={() => onCellEnter(a.id, hour)}
+                aria-label={`Select ${a.name} at ${hourLabel(hour)}`}
+                className={`h-full w-full transition-colors ${
+                  sel.has(`${a.id}@${hour}`) ? "" : "hover:bg-sky/[.08]"
+                }`}
+                style={
+                  sel.has(`${a.id}@${hour}`)
+                    ? {
+                        background: "rgba(245,197,24,.18)",
+                        boxShadow: "inset 0 0 0 2px var(--gold)",
+                      }
+                    : undefined
+                }
               />
             )}
           </div>
@@ -270,6 +408,20 @@ function BookingBlock({
   railClass: (s: string) => string;
   onEdit: (b: GridBooking) => void;
 }) {
+  if (b.booking_type === "blocked") {
+    return (
+      <button
+        onClick={() => onEdit(b)}
+        className="m-[3px] block w-[calc(100%-6px)] overflow-hidden rounded-[9px] border border-line-2 px-[9px] py-[7px] text-left transition-colors hover:border-accent"
+        style={{ background: STRIPE }}
+      >
+        <div className="truncate font-display text-[12.5px] font-extrabold text-muted">
+          Blocked
+        </div>
+        <div className="truncate text-[11px] text-muted">Unavailable</div>
+      </button>
+    );
+  }
   return (
     <button
       onClick={() => onEdit(b)}
@@ -486,13 +638,15 @@ function AgendaRow({
   onOpen: () => void;
 }) {
   const arrived = b.status === "in_progress";
-  const rail =
-    b.status === "no_show"
-      ? "bg-danger"
-      : b.status === "tentative"
-      ? "bg-gold"
-      : "bg-accent";
-  const hasCoach = b.coach_name && b.coach_name !== "Unassigned";
+  const isBlock = b.booking_type === "blocked";
+  const rail = isBlock
+    ? "bg-line-2"
+    : b.status === "no_show"
+    ? "bg-danger"
+    : b.status === "tentative"
+    ? "bg-gold"
+    : "bg-accent";
+  const hasCoach = !isBlock && b.coach_name && b.coach_name !== "Unassigned";
 
   return (
     <button
@@ -532,7 +686,8 @@ function AgendaRow({
           )}
         </div>
         <div className="truncate text-[12.5px] text-muted">
-          {assetName.get(b.asset_id) ?? "Space"} · {b.service_name}
+          {assetName.get(b.asset_id) ?? "Space"} ·{" "}
+          {isBlock ? "Unavailable" : b.service_name}
         </div>
         {hasCoach && (
           <div className="truncate text-[12px] text-muted">{b.coach_name}</div>
