@@ -115,6 +115,10 @@ export default function NewBookingForm({
   const today = ymd(new Date());
   const initialDate = params.get("date") ?? today;
   const initialAsset = params.get("asset") ?? "";
+  const initialAssets = (params.get("assets") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const initialHalf = params.get("portion") === "half";
   const initialHour = params.get("hour");
 
@@ -128,7 +132,13 @@ export default function NewBookingForm({
     usableTypes[0]?.key ?? "lesson"
   );
   const [assetIds, setAssetIds] = useState<Set<string>>(
-    new Set(initialAsset ? [initialAsset] : [])
+    new Set(
+      initialAssets.length
+        ? initialAssets
+        : initialAsset
+        ? [initialAsset]
+        : []
+    )
   );
   const initialService = params.get("service");
   const [serviceId, setServiceId] = useState(
@@ -159,6 +169,7 @@ export default function NewBookingForm({
     initialDur ? Number(initialDur) : 1
   );
   const [wantHalf, setWantHalf] = useState(initialHalf);
+  const [blockMode, setBlockMode] = useState(params.get("block") === "1");
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -338,9 +349,9 @@ export default function NewBookingForm({
     setErr(null);
     setResult(null);
     if (assetIds.size === 0) return setErr("Pick at least one space.");
-    if (!serviceId) return setErr("Pick a service.");
+    if (!blockMode && !serviceId) return setErr("Pick a service.");
     if (includedDates.length === 0) return setErr("No dates selected.");
-    if (durationHours < minDuration)
+    if (!blockMode && durationHours < minDuration)
       return setErr(`This service needs at least ${minDuration} hr.`);
 
     const occurrences: Occurrence[] = includedDates.map((date) => {
@@ -352,16 +363,16 @@ export default function NewBookingForm({
 
     setBusy(true);
     const res = await createBulkBookings({
-      booking_type: bookingType,
+      booking_type: blockMode ? "blocked" : bookingType,
       asset_ids: [...assetIds],
-      coach_id: coachId || null,
-      family_id: familyId || null,
-      service_id: serviceId || null,
-      athlete_ids: athleteIds,
+      coach_id: blockMode ? null : coachId || null,
+      family_id: blockMode ? null : familyId || null,
+      service_id: blockMode ? null : serviceId || null,
+      athlete_ids: blockMode ? [] : athleteIds,
       occurrences,
-      base_rate_cents: baseCents,
+      base_rate_cents: blockMode ? 0 : baseCents,
       peak_premium_cents: 0,
-      total_cents: totalPerBooking,
+      total_cents: blockMode ? 0 : totalPerBooking,
       want_half: onlySplittable && wantHalf,
     });
     setBusy(false);
@@ -387,7 +398,9 @@ export default function NewBookingForm({
       {result && (
         <div className="mb-4 rounded-[12px] border border-success/40 bg-success/[.08] px-4 py-3">
           <div className="font-display text-[14px] font-extrabold text-text">
-            Created {result.created} booking{result.created === 1 ? "" : "s"}.
+            {blockMode ? "Blocked" : "Created"} {result.created}{" "}
+            {blockMode ? "slot" : "booking"}
+            {result.created === 1 ? "" : "s"}.
           </div>
           {result.skipped.length > 0 && (
             <div className="mt-1 text-[12.5px] text-muted">
@@ -415,6 +428,34 @@ export default function NewBookingForm({
           >
             View schedule
           </button>
+        </div>
+      )}
+
+      <div className="mb-3 flex rounded-[12px] border border-line-2 bg-paper p-1">
+        <button
+          type="button"
+          onClick={() => setBlockMode(false)}
+          className={`flex-1 rounded-[9px] px-3 py-[9px] font-display text-[13px] font-extrabold tracking-[.02em] ${
+            !blockMode ? "bg-ink text-white" : "text-muted"
+          }`}
+        >
+          New Booking
+        </button>
+        <button
+          type="button"
+          onClick={() => setBlockMode(true)}
+          className={`flex-1 rounded-[9px] px-3 py-[9px] font-display text-[13px] font-extrabold tracking-[.02em] ${
+            blockMode ? "bg-ink text-white" : "text-muted"
+          }`}
+        >
+          Block Off
+        </button>
+      </div>
+
+      {blockMode && (
+        <div className="mb-3 rounded-[10px] border border-line-2 bg-bg/50 px-4 py-[10px] text-[12.5px] text-muted">
+          Blocks a space so nothing can be booked there. No client, coach, or
+          charge. Use it for maintenance, closures, or holds.
         </div>
       )}
 
@@ -685,6 +726,7 @@ export default function NewBookingForm({
         </div>
 
         {/* DETAILS */}
+        {!blockMode && (
         <div className="border-t border-line pt-5">
           <SecHead>Details</SecHead>
 
@@ -776,18 +818,20 @@ export default function NewBookingForm({
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* SUMMARY BAR */}
       <div className="sticky bottom-0 z-10 mt-3 flex items-center gap-3 rounded-[14px] border border-line bg-paper px-4 py-3 shadow-lg">
         <div className="min-w-0 flex-1">
           <div className="font-display text-[15px] font-extrabold text-text">
-            {count} booking{count === 1 ? "" : "s"}
+            {count} {blockMode ? "block" : "booking"}
+            {count === 1 ? "" : "s"}
           </div>
           <div className="text-[12px] text-muted">
             {assetIds.size} space{assetIds.size === 1 ? "" : "s"} ×{" "}
-            {includedDates.length} date{includedDates.length === 1 ? "" : "s"} ·{" "}
-            {moneyExact(grandTotal)}
+            {includedDates.length} date{includedDates.length === 1 ? "" : "s"}
+            {blockMode ? "" : ` · ${moneyExact(grandTotal)}`}
           </div>
         </div>
         <label className="flex items-center gap-[6px] text-[11.5px] font-medium text-muted">
@@ -804,7 +848,17 @@ export default function NewBookingForm({
           disabled={busy || count === 0}
           className="inline-flex h-11 items-center rounded-[10px] border border-ink bg-ink px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
         >
-          {busy ? "Booking…" : count > 1 ? `Create ${count}` : "Create"}
+          {busy
+            ? blockMode
+              ? "Blocking…"
+              : "Booking…"
+            : blockMode
+            ? count > 1
+              ? `Block ${count}`
+              : "Block Off"
+            : count > 1
+            ? `Create ${count}`
+            : "Create"}
         </button>
       </div>
 
