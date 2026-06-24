@@ -93,6 +93,7 @@ export default async function SchedulePage({
     start_hour: new Date(b.start_time).getHours(),
     end_hour: endHourCeil(b.end_time),
     half_slot: b.half_slot,
+    booking_type: b.booking_type ?? null,
   }));
 
   return (
