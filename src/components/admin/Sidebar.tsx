@@ -23,6 +23,7 @@ const GROUPS: Group[] = [
     items: [
       { label: "Clients", href: "/clients" },
       { label: "Athletes", href: "/athletes" },
+      { label: "New Waiver", href: "/waivers/new" },
       { label: "Coaches", href: "/coaches" },
     ],
   },
