@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
-import { getAssets, getCoaches, getServices } from "@/lib/data/resources";
+import {
+  getAssets,
+  getCoaches,
+  getServices,
+  getFamilies,
+} from "@/lib/data/resources";
+import { getBookingTypes } from "@/lib/data/booking-type-actions";
 import BookingsList, {
   type BookingListRow,
 } from "@/components/admin/BookingsList";
@@ -12,6 +18,8 @@ type Joined = {
   asset_id: string;
   coach_id: string | null;
   service_id: string | null;
+  family_id: string | null;
+  notes: string | null;
   start_time: string;
   end_time: string;
   status: string;
@@ -25,17 +33,19 @@ type Joined = {
 
 export default async function BookingsPage() {
   const supabase = await createClient();
-  const [assets, coaches, services] = await Promise.all([
+  const [assets, coaches, services, families, bookingTypes] = await Promise.all([
     getAssets(),
     getCoaches(),
     getServices(),
+    getFamilies(),
+    getBookingTypes(),
   ]);
 
   const { data } = await supabase
     .from("bookings")
     .select(
       `id, booking_number, asset_id, coach_id, service_id, start_time, end_time,
-       status, total_cents, booking_type,
+       status, total_cents, booking_type, family_id, notes,
        assets ( name ),
        services ( name ),
        coach:users!bookings_coach_id_fkey ( full_name ),
@@ -52,6 +62,9 @@ export default async function BookingsPage() {
     asset_id: b.asset_id,
     coach_id: b.coach_id,
     service_id: b.service_id,
+    family_id: b.family_id,
+    booking_type: b.booking_type,
+    notes: b.notes,
     start_time: b.start_time,
     end_time: b.end_time,
     status: b.status,
@@ -70,6 +83,8 @@ export default async function BookingsPage() {
       assets={assets}
       coaches={coaches}
       services={services}
+      families={families}
+      bookingTypes={bookingTypes}
     />
   );
 }
