@@ -8,7 +8,8 @@ import EditBookingModal, {
 } from "@/components/admin/EditBookingModal";
 import { checkInBooking, undoCheckIn } from "@/lib/data/checkin-actions";
 import { cancelBooking } from "@/lib/data/booking-actions";
-import type { Asset, Coach, Service } from "@/lib/data/resources";
+import type { Asset, Coach, Service, FamilyLite } from "@/lib/data/resources";
+import type { BookingType } from "@/lib/data/booking-type-actions";
 
 export type GridBooking = {
   id: string;
@@ -16,6 +17,8 @@ export type GridBooking = {
   asset_id: string;
   coach_id: string | null;
   service_id: string | null;
+  family_id: string | null;
+  notes: string | null;
   start_time: string;
   end_time: string;
   status: string;
@@ -33,16 +36,30 @@ const START_HOUR = 8;
 const END_HOUR = 21; // 8 AM through 9 PM rows
 
 const STRIPE =
-  "repeating-linear-gradient(45deg, var(--line) 0 6px, transparent 6px 12px)";
+  "repeating-linear-gradient(45deg,#EDEFF2 0 6px,#E3E7EC 6px 12px)";
 
-// Compact clock: "8:00a", "12:30p"
+// Opaque pale fill from a booking type's color, so a multi-hour block reads as
+// one solid piece over the grid lines instead of a translucent wash.
+function lightTint(hex: string): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const r = (n >> 16) & 255,
+    g = (n >> 8) & 255,
+    b = n & 255;
+  const mix = (v: number) => Math.round(255 + (v - 255) * 0.14);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+
+// Compact clock in the facility's local time (Eastern): "8:00a", "12:30p"
 function fmtClock(iso: string): string {
-  const d = new Date(iso);
-  let h = d.getHours();
-  const m = d.getMinutes();
-  const ap = h >= 12 ? "p" : "a";
-  h = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${h}:00${ap}` : `${h}:${String(m).padStart(2, "0")}${ap}`;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const ap = get("dayPeriod").toLowerCase().startsWith("p") ? "p" : "a";
+  return `${get("hour")}:${get("minute")}${ap}`;
 }
 
 function shiftDay(date: string, days: number): string {
@@ -58,6 +75,9 @@ export default function ScheduleGrid({
   coaches,
   services,
   coverage,
+  typeColors,
+  families,
+  bookingTypes,
 }: {
   date: string;
   assets: Asset[];
@@ -65,6 +85,9 @@ export default function ScheduleGrid({
   coaches: Coach[];
   services: Service[];
   coverage: Record<string, string[]>;
+  typeColors: Record<string, string>;
+  families: FamilyLite[];
+  bookingTypes: BookingType[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<EditableBooking | null>(null);
@@ -86,28 +109,43 @@ export default function ScheduleGrid({
   for (let h = START_HOUR; h <= END_HOUR; h++) hours.push(h);
 
   const assetName = new Map(assets.map((a) => [a.id, a.name]));
-  const splittable = new Map(assets.map((a) => [a.id, a.is_splittable]));
+  const colOf = (aid: string) => assets.findIndex((a) => a.id === aid);
 
-  // Bookings grouped by asset + start hour (a split cell can hold two halves).
-  const cellMap = new Map<string, GridBooking[]>();
+  // Half-slot bookings keep their per-cell (split) rendering, keyed by start hour.
+  const halfMap = new Map<string, GridBooking[]>();
   for (const b of bookings) {
+    if (b.half_slot == null) continue;
     const k = `${b.asset_id}@${b.start_hour}`;
-    const arr = cellMap.get(k);
+    const arr = halfMap.get(k);
     if (arr) arr.push(b);
-    else cellMap.set(k, [b]);
+    else halfMap.set(k, [b]);
   }
 
-  // cage@hour -> covering field name, while that field is booked across the hour.
-  const blocked = new Map<string, string>();
+  // Whole bookings render as one spanning block. A booking on a parent space
+  // (a field) also fills each child space (its cages) with the same booking.
+  const occupied = new Set<string>();
+  const overlayItems: { booking: GridBooking; assetId: string }[] = [];
   for (const b of bookings) {
-    const covers = coverage[b.asset_id];
-    if (!covers || covers.length === 0) continue;
-    for (let h = b.start_hour; h < b.end_hour; h++) {
-      for (const childId of covers) {
-        blocked.set(`${childId}@${h}`, assetName.get(b.asset_id) ?? "Field");
-      }
+    if (b.half_slot != null) continue;
+    for (let h = b.start_hour; h < b.end_hour; h++)
+      occupied.add(`${b.asset_id}@${h}`);
+    overlayItems.push({ booking: b, assetId: b.asset_id });
+    const children = coverage[b.asset_id] ?? [];
+    for (const childId of children) {
+      if (colOf(childId) < 0) continue;
+      for (let h = b.start_hour; h < b.end_hour; h++)
+        occupied.add(`${childId}@${h}`);
+      overlayItems.push({ booking: b, assetId: childId });
     }
   }
+
+  // null color => render as a striped "blocked" tile.
+  function colorOf(b: GridBooking): string | null {
+    if (b.booking_type === "blocked") return null;
+    return typeColors[b.booking_type ?? ""] ?? "#1E78A6";
+  }
+  const ROW = (h: number) => h - START_HOUR + 2; // header occupies row 1
+  const COL = (aid: string) => colOf(aid) + 2; // time labels occupy column 1
 
   function newBookingHref(
     assetId: string,
@@ -123,9 +161,8 @@ export default function ScheduleGrid({
     return `/new-booking?${params.toString()}`;
   }
 
-  const colOf = (aid: string) => assets.findIndex((a) => a.id === aid);
   const isOpen = (aid: string, h: number) =>
-    !cellMap.has(`${aid}@${h}`) && !blocked.has(`${aid}@${h}`);
+    !occupied.has(`${aid}@${h}`) && !halfMap.has(`${aid}@${h}`);
 
   function rectSet(a: { c: number; r: number }, b: { c: number; r: number }) {
     const c0 = Math.min(a.c, b.c),
@@ -203,6 +240,9 @@ export default function ScheduleGrid({
       asset_id: b.asset_id,
       coach_id: b.coach_id,
       service_id: b.service_id,
+      family_id: b.family_id,
+      booking_type: b.booking_type ?? null,
+      notes: b.notes,
       start_time: b.start_time,
       end_time: b.end_time,
       status: b.status,
@@ -216,41 +256,64 @@ export default function ScheduleGrid({
       {/* Desktop / tablet: full grid */}
       <div className="hidden overflow-hidden rounded-[16px] border border-line bg-paper md:block">
         <div className="overflow-auto">
-          <div
-            className="grid min-w-max"
-            style={{
-              gridTemplateColumns: `66px repeat(${assets.length}, minmax(132px, 1fr))`,
-              gridAutoRows: "58px",
-            }}
-          >
-            <div className="border-b border-r border-line" />
-            {assets.map((a) => (
-              <div
-                key={a.id}
-                className="flex items-center justify-center border-b border-r border-line px-1 py-2 text-center font-display text-[11px] font-extrabold text-text last:border-r-0"
-              >
-                {a.name}
-              </div>
-            ))}
+          <div className="relative min-w-max">
+            {/* base grid: header, time labels, empty + half-slot cells */}
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `66px repeat(${assets.length}, 140px)`,
+                gridAutoRows: "58px",
+              }}
+            >
+              <div className="border-b border-r border-line" />
+              {assets.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-center border-b border-r border-line px-1 py-2 text-center font-display text-[11px] font-extrabold text-text last:border-r-0"
+                >
+                  {a.name}
+                </div>
+              ))}
 
-            {hours.map((h) => (
-              <RowFragment
-                key={h}
-                hour={h}
-                assets={assets}
-                cellMap={cellMap}
-                blocked={blocked}
-                splittable={splittable}
-                railClass={railClass}
-                sel={sel}
-                onCellDown={cellDown}
-                onCellEnter={cellEnter}
-                onEdit={(b) => setEditing(toEditable(b))}
-                onCreate={(assetId, portion) =>
-                  router.push(newBookingHref(assetId, h, portion))
-                }
-              />
-            ))}
+              {hours.map((h) => (
+                <RowFragment
+                  key={h}
+                  hour={h}
+                  assets={assets}
+                  halfMap={halfMap}
+                  occupied={occupied}
+                  railClass={railClass}
+                  sel={sel}
+                  onCellDown={cellDown}
+                  onCellEnter={cellEnter}
+                  onEdit={(b) => setEditing(toEditable(b))}
+                  onCreate={(assetId, portion) =>
+                    router.push(newBookingHref(assetId, h, portion))
+                  }
+                />
+              ))}
+            </div>
+
+            {/* overlay: spanning, color-coded booking blocks (+ field fills) */}
+            <div
+              className="pointer-events-none absolute inset-0 grid"
+              style={{
+                gridTemplateColumns: `66px repeat(${assets.length}, 140px)`,
+                gridTemplateRows: `repeat(${hours.length + 1}, 58px)`,
+              }}
+            >
+              {overlayItems.map((it, i) => (
+                <OverlayBlock
+                  key={`${it.booking.id}@${it.assetId}-${i}`}
+                  b={it.booking}
+                  col={COL(it.assetId)}
+                  rowStart={ROW(it.booking.start_hour)}
+                  rowEnd={ROW(it.booking.end_hour)}
+                  color={colorOf(it.booking)}
+                  onEdit={(b) => setEditing(toEditable(b))}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -298,6 +361,7 @@ export default function ScheduleGrid({
           date={date}
           bookings={bookings}
           assetName={assetName}
+          typeColors={typeColors}
           onEditBooking={(b) => setEditing(toEditable(b))}
         />
       </div>
@@ -308,6 +372,8 @@ export default function ScheduleGrid({
           assets={assets}
           coaches={coaches}
           services={services}
+          families={families}
+          bookingTypes={bookingTypes}
           onClose={() => setEditing(null)}
         />
       )}
@@ -318,9 +384,8 @@ export default function ScheduleGrid({
 function RowFragment({
   hour,
   assets,
-  cellMap,
-  blocked,
-  splittable,
+  halfMap,
+  occupied,
   railClass,
   sel,
   onCellDown,
@@ -330,9 +395,8 @@ function RowFragment({
 }: {
   hour: number;
   assets: Asset[];
-  cellMap: Map<string, GridBooking[]>;
-  blocked: Map<string, string>;
-  splittable: Map<string, boolean | undefined>;
+  halfMap: Map<string, GridBooking[]>;
+  occupied: Set<string>;
   railClass: (s: string) => string;
   sel: Set<string>;
   onCellDown: (assetId: string, hour: number) => void;
@@ -346,44 +410,33 @@ function RowFragment({
         {hourLabel(hour)}
       </div>
       {assets.map((a) => {
-        const list = cellMap.get(`${a.id}@${hour}`) ?? [];
-        const blockName = blocked.get(`${a.id}@${hour}`);
-        const whole = list.find((b) => b.half_slot == null);
-
+        const key = `${a.id}@${hour}`;
+        const halfList = halfMap.get(key) ?? [];
         return (
           <div
             key={a.id}
             className="border-b border-r border-line last:border-r-0"
           >
-            {whole ? (
-              <BookingBlock b={whole} railClass={railClass} onEdit={onEdit} />
-            ) : list.length > 0 ? (
+            {occupied.has(key) ? (
+              // covered by a spanning block in the overlay; leave the cell bare
+              <div className="h-full w-full" />
+            ) : halfList.length > 0 ? (
               <HalfCell
-                list={list}
+                list={halfList}
                 railClass={railClass}
                 onEdit={onEdit}
                 onCreate={() => onCreate(a.id, "half")}
               />
-            ) : blockName ? (
-              <div
-                className="m-[3px] flex h-[calc(100%-6px)] flex-col items-center justify-center rounded-[9px] border border-line-2 text-center"
-                style={{ background: STRIPE }}
-              >
-                <div className="font-display text-[10px] font-extrabold text-muted">
-                  Blocked
-                </div>
-                <div className="text-[10px] text-muted">{blockName}</div>
-              </div>
             ) : (
               <button
                 onMouseDown={() => onCellDown(a.id, hour)}
                 onMouseEnter={() => onCellEnter(a.id, hour)}
                 aria-label={`Select ${a.name} at ${hourLabel(hour)}`}
                 className={`h-full w-full transition-colors ${
-                  sel.has(`${a.id}@${hour}`) ? "" : "hover:bg-sky/[.08]"
+                  sel.has(key) ? "" : "hover:bg-sky/[.08]"
                 }`}
                 style={
-                  sel.has(`${a.id}@${hour}`)
+                  sel.has(key)
                     ? {
                         background: "rgba(245,197,24,.18)",
                         boxShadow: "inset 0 0 0 2px var(--gold)",
@@ -399,42 +452,86 @@ function RowFragment({
   );
 }
 
-function BookingBlock({
+function OverlayBlock({
   b,
-  railClass,
+  col,
+  rowStart,
+  rowEnd,
+  color,
   onEdit,
 }: {
   b: GridBooking;
-  railClass: (s: string) => string;
+  col: number;
+  rowStart: number;
+  rowEnd: number;
+  color: string | null;
   onEdit: (b: GridBooking) => void;
 }) {
-  if (b.booking_type === "blocked") {
+  const place: React.CSSProperties = {
+    gridColumn: col,
+    gridRow: `${rowStart} / ${rowEnd}`,
+  };
+  const tall = rowEnd - rowStart >= 2;
+
+  if (color === null) {
     return (
       <button
         onClick={() => onEdit(b)}
-        className="m-[3px] block w-[calc(100%-6px)] overflow-hidden rounded-[9px] border border-line-2 px-[9px] py-[7px] text-left transition-colors hover:border-accent"
-        style={{ background: STRIPE }}
+        style={{ ...place, background: STRIPE, borderLeft: "4px solid #9CA3AF" }}
+        className="pointer-events-auto m-[3px] flex flex-col justify-center overflow-hidden rounded-[9px] border border-line-2 px-[9px] py-[6px] text-left hover:shadow-md"
       >
         <div className="truncate font-display text-[12.5px] font-extrabold text-muted">
           Blocked
         </div>
-        <div className="truncate text-[11px] text-muted">Unavailable</div>
+        {tall && (
+          <div className="truncate text-[11px] text-muted">Unavailable</div>
+        )}
       </button>
     );
   }
+
   return (
     <button
       onClick={() => onEdit(b)}
-      className={`m-[3px] block w-[calc(100%-6px)] overflow-hidden rounded-[9px] border-l-[3px] px-[9px] py-[7px] text-left transition-colors hover:border-accent ${railClass(
-        b.status
-      )}`}
+      style={{
+        ...place,
+        background: lightTint(color),
+        borderLeft: `4px solid ${color}`,
+      }}
+      className="pointer-events-auto m-[3px] flex flex-col justify-center overflow-hidden rounded-[9px] px-[9px] py-[6px] text-left transition-shadow hover:shadow-md"
     >
-      <div className="truncate font-display text-[12.5px] font-extrabold text-text">
-        {b.who}
+      <div className="flex items-center gap-[5px]">
+        {b.status === "in_progress" && (
+          <span
+            className="h-[6px] w-[6px] flex-shrink-0 rounded-full"
+            style={{ background: color }}
+          />
+        )}
+        <span className="truncate font-display text-[12.5px] font-extrabold text-text">
+          {b.who}
+        </span>
+        {b.status === "no_show" && (
+          <span className="flex-shrink-0 rounded-[4px] bg-danger/[.12] px-[4px] text-[9px] font-extrabold uppercase tracking-[.03em] text-danger">
+            No-show
+          </span>
+        )}
+        {b.status === "tentative" && (
+          <span className="flex-shrink-0 rounded-[4px] bg-gold/[.20] px-[4px] text-[9px] font-extrabold uppercase tracking-[.03em] text-text">
+            Tent
+          </span>
+        )}
       </div>
       <div className="truncate text-[11px] text-muted">
-        {b.service_name} · {b.coach_name}
+        {b.service_name}
+        {b.coach_name && b.coach_name !== "Unassigned"
+          ? ` · ${b.coach_name}`
+          : ""}
       </div>
+      {tall && (
+        <div className="truncate text-[10.5px] tabular-nums text-muted">
+          {fmtClock(b.start_time)}–{fmtClock(b.end_time)}
+        </div>
+      )}
     </button>
   );
 }
@@ -494,11 +591,13 @@ function MobileAgenda({
   date,
   bookings,
   assetName,
+  typeColors,
   onEditBooking,
 }: {
   date: string;
   bookings: GridBooking[];
   assetName: Map<string, string>;
+  typeColors: Record<string, string>;
   onEditBooking: (b: GridBooking) => void;
 }) {
   const router = useRouter();
@@ -598,6 +697,11 @@ function MobileAgenda({
                 b={b}
                 assetName={assetName}
                 past={new Date(b.end_time).getTime() < nowMs}
+                railColor={
+                  b.booking_type === "blocked"
+                    ? "#9CA3AF"
+                    : typeColors[b.booking_type ?? ""] ?? "#1E78A6"
+                }
                 onOpen={() => setSheet(b)}
               />
             </div>
@@ -630,22 +734,17 @@ function AgendaRow({
   b,
   assetName,
   past,
+  railColor,
   onOpen,
 }: {
   b: GridBooking;
   assetName: Map<string, string>;
   past: boolean;
+  railColor: string;
   onOpen: () => void;
 }) {
   const arrived = b.status === "in_progress";
   const isBlock = b.booking_type === "blocked";
-  const rail = isBlock
-    ? "bg-line-2"
-    : b.status === "no_show"
-    ? "bg-danger"
-    : b.status === "tentative"
-    ? "bg-gold"
-    : "bg-accent";
   const hasCoach = !isBlock && b.coach_name && b.coach_name !== "Unassigned";
 
   return (
@@ -663,7 +762,10 @@ function AgendaRow({
           {fmtClock(b.end_time)}
         </div>
       </div>
-      <div className={`w-[3px] flex-shrink-0 rounded-full ${rail}`} />
+      <div
+        className="w-[3px] flex-shrink-0 rounded-full"
+        style={{ background: railColor }}
+      />
       <div className="min-w-0 flex-1 self-center">
         <div className="flex items-center gap-[6px]">
           <span
