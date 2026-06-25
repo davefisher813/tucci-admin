@@ -20,7 +20,13 @@ import {
   getDayBookings,
   type DayBooking,
 } from "@/lib/data/availability-actions";
-import type { BookingType } from "@/lib/data/booking-type-actions";
+import {
+  createBookingType,
+  type BookingType,
+} from "@/lib/data/booking-type-actions";
+import { createService } from "@/lib/data/settings-actions";
+import { createFamily, createAthlete } from "@/lib/data/family-actions";
+import { createCoachWithLogin } from "@/lib/data/coach-actions";
 
 const WEEKDAYS = [
   ["Su", 0],
@@ -32,8 +38,6 @@ const WEEKDAYS = [
   ["Sa", 6],
 ] as const;
 
-const DURATIONS = [0.5, 1, 1.5, 2, 3];
-
 // "HH:MM" start-time options, 8:00 AM through 9:00 PM in half-hour steps.
 const START_OPTIONS: { value: string; label: string }[] = [];
 for (let h = 8; h <= 21; h++) {
@@ -44,6 +48,28 @@ for (let h = 8; h <= 21; h++) {
     const disp = `${h % 12 === 0 ? 12 : h % 12}:${mm} ${h >= 12 ? "PM" : "AM"}`;
     START_OPTIONS.push({ value: `${hh}:${mm}`, label: disp });
   }
+}
+
+// End-time options: 8:30 AM through 10:00 PM in half-hour steps.
+const END_OPTIONS: { value: string; label: string }[] = [];
+for (let h = 8; h <= 22; h++) {
+  for (const m of [0, 30]) {
+    if (h === 8 && m === 0) continue;
+    if (h === 22 && m === 30) continue;
+    const hh = String(h).padStart(2, "0");
+    const mm = String(m).padStart(2, "0");
+    const disp = `${h % 12 === 0 ? 12 : h % 12}:${mm} ${h >= 12 ? "PM" : "AM"}`;
+    END_OPTIONS.push({ value: `${hh}:${mm}`, label: disp });
+  }
+}
+function hmToMin(s: string): number {
+  const [h, m] = s.split(":").map(Number);
+  return h * 60 + m;
+}
+function minToHm(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 function ymdLocal(d: Date): string {
@@ -96,11 +122,11 @@ function generateDates(
 
 export default function NewBookingForm({
   assets,
-  services,
-  coaches,
-  families,
-  athletes,
-  bookingTypes = [],
+  services: servicesInit,
+  coaches: coachesInit,
+  families: familiesInit,
+  athletes: athletesInit,
+  bookingTypes: bookingTypesInit = [],
 }: {
   assets: Asset[];
   services: Service[];
@@ -111,6 +137,14 @@ export default function NewBookingForm({
 }) {
   const router = useRouter();
   const params = useSearchParams();
+
+  // Lists are stateful so "+ New" can append inline-created items.
+  const [services, setServices] = useState<Service[]>(servicesInit);
+  const [coaches, setCoaches] = useState<Coach[]>(coachesInit);
+  const [families, setFamilies] = useState<FamilyLite[]>(familiesInit);
+  const [athletes, setAthletes] = useState<AthleteLite[]>(athletesInit);
+  const [bookingTypes, setBookingTypes] =
+    useState<BookingType[]>(bookingTypesInit);
 
   const today = ymd(new Date());
   const initialDate = params.get("date") ?? today;
@@ -150,6 +184,150 @@ export default function NewBookingForm({
   const [familyId, setFamilyId] = useState("");
   const [athleteIds, setAthleteIds] = useState<string[]>([]);
 
+  // Inline "+ New" panels
+  const [addPanel, setAddPanel] = useState<
+    "" | "type" | "service" | "family" | "coach"
+  >("");
+  const [addBusy, setAddBusy] = useState(false);
+  const [addErr, setAddErr] = useState<string | null>(null);
+  const [ntLabel, setNtLabel] = useState("");
+  const [ntColor, setNtColor] = useState("#7DC4E8");
+  const [nsName, setNsName] = useState("");
+  const [nsPrice, setNsPrice] = useState("");
+  const [nsUnit, setNsUnit] = useState("/hr");
+  const [nsMin, setNsMin] = useState("1");
+  const [ncName, setNcName] = useState("");
+  const [ncEmail, setNcEmail] = useState("");
+  const [ncLogin, setNcLogin] = useState(false);
+  const [nfName, setNfName] = useState("");
+  const [nfEmail, setNfEmail] = useState("");
+  const [nfPhone, setNfPhone] = useState("");
+  const [nfAths, setNfAths] = useState<{ first: string; last: string }[]>([
+    { first: "", last: "" },
+  ]);
+
+  function openPanel(p: "type" | "service" | "family" | "coach") {
+    setAddErr(null);
+    setAddPanel((cur) => (cur === p ? "" : p));
+  }
+
+  async function saveNewType() {
+    if (!ntLabel.trim()) return setAddErr("Name the type.");
+    setAddBusy(true);
+    setAddErr(null);
+    const res = await createBookingType({
+      label: ntLabel.trim(),
+      color: ntColor,
+      sort_order: 100,
+    });
+    setAddBusy(false);
+    if (res.error || !res.bookingType)
+      return setAddErr(res.error ?? "Could not add.");
+    setBookingTypes((p) => [...p, res.bookingType!]);
+    setBookingType(res.bookingType.key);
+    setNtLabel("");
+    setAddPanel("");
+  }
+
+  async function saveNewService() {
+    const price = Math.round(parseFloat(nsPrice) * 100);
+    if (!nsName.trim()) return setAddErr("Name the service.");
+    if (!Number.isFinite(price) || price < 0)
+      return setAddErr("Enter a valid price.");
+    const min = parseFloat(nsMin) || 1;
+    const code =
+      nsName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") +
+      "-" +
+      Date.now().toString().slice(-4);
+    setAddBusy(true);
+    setAddErr(null);
+    const res = await createService({
+      code,
+      name: nsName.trim(),
+      category: "Custom",
+      base_rate_cents: price,
+      unit: nsUnit,
+      min_duration_hours: min,
+    });
+    setAddBusy(false);
+    if (res.error || !res.service)
+      return setAddErr(res.error ?? "Could not add.");
+    setServices((p) => [...p, res.service!]);
+    setServiceId(res.service.id);
+    setNsName("");
+    setNsPrice("");
+    setAddPanel("");
+  }
+
+  async function saveNewFamily() {
+    if (!nfName.trim()) return setAddErr("Family name is required.");
+    setAddBusy(true);
+    setAddErr(null);
+    const res = await createFamily({
+      family_name: nfName.trim(),
+      primary_email: nfEmail.trim() || null,
+      primary_phone: nfPhone.trim() || null,
+    });
+    if (res.error || !res.id) {
+      setAddBusy(false);
+      return setAddErr(res.error ?? "Could not add family.");
+    }
+    const fid = res.id;
+    const newAths: AthleteLite[] = [];
+    for (const a of nfAths.filter((x) => x.first.trim() && x.last.trim())) {
+      const ar = await createAthlete({
+        family_id: fid,
+        first_name: a.first.trim(),
+        last_name: a.last.trim(),
+        position: "unknown",
+      });
+      if (ar.athlete) newAths.push(ar.athlete);
+    }
+    setAddBusy(false);
+    setFamilies((p) => [...p, { id: fid, family_name: nfName.trim() }]);
+    if (newAths.length) setAthletes((p) => [...p, ...newAths]);
+    setFamilyId(fid);
+    setAthleteIds([]);
+    setNfName("");
+    setNfEmail("");
+    setNfPhone("");
+    setNfAths([{ first: "", last: "" }]);
+    setAddPanel("");
+  }
+
+  async function saveNewCoach() {
+    if (!ncName.trim()) return setAddErr("Name the coach.");
+    if (ncLogin) {
+      setAddBusy(true);
+      setAddErr(null);
+      const res = await createCoachWithLogin({
+        name: ncName.trim(),
+        email: ncEmail.trim(),
+      });
+      setAddBusy(false);
+      if (res.error || !res.coach)
+        return setAddErr(res.error ?? "Could not add coach.");
+      setCoaches((p) => [...p, res.coach!]);
+      setCoachId(res.coach.id);
+    } else {
+      const id = "name:" + ncName.trim();
+      setCoaches((p) =>
+        p.some((c) => c.id === id)
+          ? p
+          : [...p, { id, full_name: ncName.trim() }]
+      );
+      setCoachId(id);
+    }
+    setNcName("");
+    setNcEmail("");
+    setNcLogin(false);
+    setAddPanel("");
+  }
+
   const [startDate, setStartDate] = useState(initialDate);
   const [endDate, setEndDate] = useState(initialDate);
   const [repeat, setRepeat] = useState<
@@ -170,6 +348,8 @@ export default function NewBookingForm({
   );
   const [wantHalf, setWantHalf] = useState(initialHalf);
   const [blockMode, setBlockMode] = useState(params.get("block") === "1");
+  const [blockLabel, setBlockLabel] = useState("");
+  const [blockNotes, setBlockNotes] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -306,6 +486,35 @@ export default function NewBookingForm({
     setResult(null);
     setAssetIds((prev) => {
       const next = new Set(prev);
+      const isParent = Boolean(coverage[id]);
+
+      if (isParent) {
+        // Field / turf / facility: select it as one space, drop any of its
+        // cages that were individually selected. Deselect just removes it.
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+          for (const child of coverage[id]) next.delete(child);
+        }
+        if (next.size !== 1) setWantHalf(false);
+        return next;
+      }
+
+      // A cage: if it's covered by a currently-selected field, "open up" that
+      // field into its individual cages (minus this one) so cages are editable.
+      const parentSel = Object.keys(coverage).find(
+        (p) => prev.has(p) && coverage[p].includes(id)
+      );
+      if (parentSel && !prev.has(id)) {
+        next.delete(parentSel);
+        for (const child of coverage[parentSel]) {
+          if (child !== id) next.add(child);
+        }
+        if (next.size !== 1) setWantHalf(false);
+        return next;
+      }
+
       if (next.has(id)) next.delete(id);
       else next.add(id);
       if (next.size !== 1) setWantHalf(false);
@@ -365,7 +574,12 @@ export default function NewBookingForm({
     const res = await createBulkBookings({
       booking_type: blockMode ? "blocked" : bookingType,
       asset_ids: [...assetIds],
-      coach_id: blockMode ? null : coachId || null,
+      coach_id:
+        blockMode || coachId.startsWith("name:") ? null : coachId || null,
+      coach_name:
+        !blockMode && coachId.startsWith("name:")
+          ? coachId.slice(5)
+          : null,
       family_id: blockMode ? null : familyId || null,
       service_id: blockMode ? null : serviceId || null,
       athlete_ids: blockMode ? [] : athleteIds,
@@ -374,6 +588,10 @@ export default function NewBookingForm({
       peak_premium_cents: 0,
       total_cents: blockMode ? 0 : totalPerBooking,
       want_half: onlySplittable && wantHalf,
+      notes: blockMode
+        ? [blockLabel.trim(), blockNotes.trim()].filter(Boolean).join(" — ") ||
+          null
+        : null,
     });
     setBusy(false);
 
@@ -600,29 +818,23 @@ export default function NewBookingForm({
                 ))}
               </select>
             </Field>
-            <Field label="Duration">
-              <div className="flex flex-wrap gap-[6px]">
-                {DURATIONS.map((d) => {
-                  const tooShort = d < minDuration;
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      disabled={tooShort}
-                      onClick={() => setDurationHours(d)}
-                      className={`rounded-[8px] border px-[10px] py-[7px] font-display text-[12px] font-extrabold ${
-                        tooShort
-                          ? "border-line bg-bg text-muted opacity-50"
-                          : durationHours === d
-                          ? "border-ink bg-ink text-white"
-                          : "border-line-2 bg-paper text-text hover:border-accent"
-                      }`}
-                    >
-                      {d === 0.5 ? "30m" : d === 1.5 ? "90m" : `${d}h`}
-                    </button>
-                  );
-                })}
-              </div>
+            <Field label="End">
+              <select
+                value={minToHm(hmToMin(startTime) + Math.round(durationHours * 60))}
+                onChange={(e) => {
+                  const dur = (hmToMin(e.target.value) - hmToMin(startTime)) / 60;
+                  if (dur >= 0.5) setDurationHours(dur);
+                }}
+                className="sel"
+              >
+                {END_OPTIONS.filter(
+                  (o) => hmToMin(o.value) > hmToMin(startTime)
+                ).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </Field>
           </div>
 
@@ -726,6 +938,29 @@ export default function NewBookingForm({
         </div>
 
         {/* DETAILS */}
+        {blockMode && (
+          <div className="border-t border-line pt-5">
+            <SecHead>Block Details</SecHead>
+            <div className="field">
+              <label className="lab">Label / Reason</label>
+              <input
+                className="sel"
+                value={blockLabel}
+                onChange={(e) => setBlockLabel(e.target.value)}
+                placeholder="e.g. Maintenance, Private Event"
+              />
+            </div>
+            <div className="field">
+              <label className="lab">Notes</label>
+              <input
+                className="sel"
+                value={blockNotes}
+                onChange={(e) => setBlockNotes(e.target.value)}
+                placeholder="Anything else (optional)"
+              />
+            </div>
+          </div>
+        )}
         {!blockMode && (
         <div className="border-t border-line pt-5">
           <SecHead>Details</SecHead>
@@ -743,6 +978,13 @@ export default function NewBookingForm({
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => openPanel("type")}
+                className="mt-1 font-display text-[11px] font-extrabold text-accent"
+              >
+                + New Type
+              </button>
             </Field>
             <Field label="Service">
               <select
@@ -756,8 +998,112 @@ export default function NewBookingForm({
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => openPanel("service")}
+                className="mt-1 font-display text-[11px] font-extrabold text-accent"
+              >
+                + New Service
+              </button>
             </Field>
           </div>
+
+          {addPanel === "type" && (
+            <AddCard
+              title="New Booking Type"
+              busy={addBusy}
+              err={addErr}
+              onCancel={() => setAddPanel("")}
+              onSave={saveNewType}
+            >
+              <div className="field">
+                <label className="lab">Label</label>
+                <input
+                  className="sel"
+                  value={ntLabel}
+                  onChange={(e) => setNtLabel(e.target.value)}
+                  placeholder="e.g. Clinic"
+                />
+              </div>
+              <div className="field">
+                <label className="lab">Color</label>
+                <div className="flex gap-2">
+                  {["#7DC4E8", "#1E78A6", "#F5C518", "#1E8E5A", "#C0392B", "#8A92A0"].map(
+                    (c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setNtColor(c)}
+                        style={{ background: c }}
+                        className={`h-[28px] w-[28px] rounded-[7px] ${
+                          ntColor === c ? "ring-2 ring-ink ring-offset-1" : ""
+                        }`}
+                      />
+                    )
+                  )}
+                </div>
+              </div>
+            </AddCard>
+          )}
+
+          {addPanel === "service" && (
+            <AddCard
+              title="New Service"
+              busy={addBusy}
+              err={addErr}
+              onCancel={() => setAddPanel("")}
+              onSave={saveNewService}
+            >
+              <div className="field">
+                <label className="lab">Name</label>
+                <input
+                  className="sel"
+                  value={nsName}
+                  onChange={(e) => setNsName(e.target.value)}
+                  placeholder="e.g. Small Group Hitting"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="field">
+                  <label className="lab">Price (USD)</label>
+                  <input
+                    className="sel"
+                    inputMode="decimal"
+                    value={nsPrice}
+                    onChange={(e) => setNsPrice(e.target.value)}
+                    placeholder="75"
+                  />
+                </div>
+                <div className="field">
+                  <label className="lab">Unit</label>
+                  <select
+                    className="sel"
+                    value={nsUnit}
+                    onChange={(e) => setNsUnit(e.target.value)}
+                  >
+                    <option value="/hr">/hr</option>
+                    <option value="/session">/session</option>
+                    <option value="/athlete/hr">/athlete/hr</option>
+                    <option value="/mo">/mo</option>
+                  </select>
+                </div>
+              </div>
+              <div className="field">
+                <label className="lab">Minimum Duration (hrs)</label>
+                <input
+                  className="sel"
+                  inputMode="decimal"
+                  value={nsMin}
+                  onChange={(e) => setNsMin(e.target.value)}
+                  placeholder="1"
+                />
+              </div>
+              <p className="hint">
+                Code is generated automatically. Category defaults to Custom and
+                can be refined in Pricing.
+              </p>
+            </AddCard>
+          )}
 
           <div className="mt-3 grid grid-cols-2 gap-3">
             <Field label="Coach">
@@ -770,9 +1116,17 @@ export default function NewBookingForm({
                 {coaches.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.full_name}
+                    {c.id.startsWith("name:") ? " (name only)" : ""}
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => openPanel("coach")}
+                className="mt-1 font-display text-[11px] font-extrabold text-accent"
+              >
+                + New Coach
+              </button>
             </Field>
             <Field label="Family">
               <select
@@ -790,8 +1144,153 @@ export default function NewBookingForm({
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => openPanel("family")}
+                className="mt-1 font-display text-[11px] font-extrabold text-accent"
+              >
+                + New Family
+              </button>
             </Field>
           </div>
+
+          {addPanel === "coach" && (
+            <AddCard
+              title="New Coach"
+              busy={addBusy}
+              err={addErr}
+              onCancel={() => setAddPanel("")}
+              onSave={saveNewCoach}
+            >
+              <div className="field">
+                <label className="lab">Name</label>
+                <input
+                  className="sel"
+                  value={ncName}
+                  onChange={(e) => setNcName(e.target.value)}
+                  placeholder="Full name"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-[12.5px] font-medium text-text">
+                <input
+                  type="checkbox"
+                  checked={ncLogin}
+                  onChange={(e) => setNcLogin(e.target.checked)}
+                  className="h-[15px] w-[15px] accent-[#1E78A6]"
+                />
+                Create a login for them
+              </label>
+              {ncLogin && (
+                <div className="field mt-2">
+                  <label className="lab">Email</label>
+                  <input
+                    className="sel"
+                    type="email"
+                    value={ncEmail}
+                    onChange={(e) => setNcEmail(e.target.value)}
+                    placeholder="coach@email.com"
+                  />
+                  <p className="hint">
+                    Creating a login needs your Supabase service role key in
+                    Vercel. Without it, leave this off and the coach is assigned
+                    by name only.
+                  </p>
+                </div>
+              )}
+            </AddCard>
+          )}
+
+          {addPanel === "family" && (
+            <AddCard
+              title="New Family"
+              busy={addBusy}
+              err={addErr}
+              onCancel={() => setAddPanel("")}
+              onSave={saveNewFamily}
+            >
+              <div className="field">
+                <label className="lab">Family / Last Name</label>
+                <input
+                  className="sel"
+                  value={nfName}
+                  onChange={(e) => setNfName(e.target.value)}
+                  placeholder="e.g. Delgado"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="field">
+                  <label className="lab">Email</label>
+                  <input
+                    className="sel"
+                    type="email"
+                    value={nfEmail}
+                    onChange={(e) => setNfEmail(e.target.value)}
+                    placeholder="parent@email.com"
+                  />
+                </div>
+                <div className="field">
+                  <label className="lab">Phone</label>
+                  <input
+                    className="sel"
+                    type="tel"
+                    value={nfPhone}
+                    onChange={(e) => setNfPhone(e.target.value)}
+                    placeholder="(203) 555-0100"
+                  />
+                </div>
+              </div>
+              <p className="lab">Athletes</p>
+              {nfAths.map((a, i) => (
+                <div key={i} className="mb-2 grid grid-cols-[1fr_1fr_auto] gap-2">
+                  <input
+                    className="sel"
+                    value={a.first}
+                    onChange={(e) =>
+                      setNfAths((p) =>
+                        p.map((x, j) =>
+                          j === i ? { ...x, first: e.target.value } : x
+                        )
+                      )
+                    }
+                    placeholder="First"
+                  />
+                  <input
+                    className="sel"
+                    value={a.last}
+                    onChange={(e) =>
+                      setNfAths((p) =>
+                        p.map((x, j) =>
+                          j === i ? { ...x, last: e.target.value } : x
+                        )
+                      )
+                    }
+                    placeholder="Last"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNfAths((p) =>
+                        p.length <= 1 ? p : p.filter((_, j) => j !== i)
+                      )
+                    }
+                    className="px-2 font-display text-[12px] font-bold text-muted"
+                    aria-label="Remove athlete"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setNfAths((p) => [...p, { first: "", last: "" }])
+                }
+                className="font-display text-[11px] font-extrabold text-accent"
+              >
+                + Add Athlete
+              </button>
+            </AddCard>
+          )}
 
           {familyId && familyAthletes.length > 0 && (
             <div className="mt-3">
@@ -897,6 +1396,51 @@ function Field({
         {label}
       </div>
       {children}
+    </div>
+  );
+}
+
+function AddCard({
+  title,
+  busy,
+  err,
+  onSave,
+  onCancel,
+  children,
+}: {
+  title: string;
+  busy: boolean;
+  err: string | null;
+  onSave: () => void;
+  onCancel: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-3 rounded-[12px] border border-line-2 bg-bg/40 p-4">
+      <div className="mb-3 font-display text-[12.5px] font-extrabold text-text">
+        {title}
+      </div>
+      {children}
+      {err && (
+        <p className="mt-2 text-[12px] font-semibold text-danger">{err}</p>
+      )}
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={busy}
+          className="rounded-[9px] border border-ink bg-ink px-4 py-[9px] font-display text-[12px] font-extrabold text-white disabled:opacity-50"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-[9px] border border-line-2 bg-paper px-4 py-[9px] font-display text-[12px] font-extrabold text-muted"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
