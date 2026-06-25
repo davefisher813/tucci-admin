@@ -87,6 +87,21 @@ export default function SettingsManager({
         <span className="shrink-0 text-muted">›</span>
       </Link>
 
+      <Link
+        href="/settings/hours"
+        className="mb-6 flex items-center gap-3 rounded-[16px] border border-line bg-paper px-4 py-[15px] hover:border-accent"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-[16px] font-bold tracking-[-.01em] text-text">
+            Hours
+          </span>
+          <span className="mt-[2px] block text-[13px] text-muted">
+            Operating hours and peak window for the Space Value numbers
+          </span>
+        </span>
+        <span className="shrink-0 text-muted">›</span>
+      </Link>
+
       {err && (
         <div className="mb-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[13px] text-danger">
           {err}
