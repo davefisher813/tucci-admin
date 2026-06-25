@@ -147,7 +147,7 @@ export default function WaiverIntakeForm() {
 
       {/* UPLOAD */}
       <div className="mb-[14px] rounded-[16px] border border-line bg-paper p-[18px]">
-        <div className="sec">Signed waiver</div>
+        <div className="sec">Signed Waiver</div>
         {file ? (
           <div className="flex items-center gap-[10px] rounded-[10px] border border-line bg-bg/50 px-3 py-[10px]">
             <div className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[8px] bg-accent font-display text-[13px] font-extrabold text-white">
@@ -192,7 +192,7 @@ export default function WaiverIntakeForm() {
 
       {/* PARENT */}
       <div className="mb-[14px] rounded-[16px] border border-line bg-paper p-[18px]">
-        <div className="sec">Parent / guardian</div>
+        <div className="sec">Parent / Guardian</div>
         <div className="field">
           <label className="lab">
             Family / last name <span className="text-danger">*</span>
@@ -272,7 +272,7 @@ export default function WaiverIntakeForm() {
               </div>
             </div>
             <div className="field">
-              <label className="lab">Date of birth</label>
+              <label className="lab">Date of Birth</label>
               <input
                 className="inp"
                 type="date"
@@ -320,7 +320,7 @@ export default function WaiverIntakeForm() {
           </div>
         </div>
         <div className="field mt-[6px]">
-          <label className="lab">Date signed</label>
+          <label className="lab">Date Signed</label>
           <input
             className="inp"
             type="date"
