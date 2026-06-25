@@ -35,6 +35,13 @@ export type GridBooking = {
 const START_HOUR = 8;
 const END_HOUR = 21; // 8 AM through 9 PM rows
 
+// Base-grid geometry (must match the grid below). Used to position blocks by
+// the minute so :30 starts/ends land halfway through a cell.
+const ROW_H = 58; // px per hour
+const HEADER_H = 58; // px header row
+const GUTTER_W = 66; // px time-label column
+const COL_W = 140; // px per asset column
+
 const STRIPE =
   "repeating-linear-gradient(45deg,#EDEFF2 0 6px,#E3E7EC 6px 12px)";
 
@@ -47,6 +54,21 @@ function lightTint(hex: string): string {
     b = n & 255;
   const mix = (v: number) => Math.round(255 + (v - 255) * 0.14);
   return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+
+// Hour + minute in the facility's local time (Eastern), for block geometry.
+function etHM(iso: string): { h: number; m: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(iso));
+  const get = (t: string) =>
+    Number(parts.find((p) => p.type === t)?.value ?? "0");
+  let h = get("hour");
+  if (h === 24) h = 0;
+  return { h, m: get("minute") };
 }
 
 // Compact clock in the facility's local time (Eastern): "8:00a", "12:30p"
@@ -144,8 +166,6 @@ export default function ScheduleGrid({
     if (b.booking_type === "blocked") return null;
     return typeColors[b.booking_type ?? ""] ?? "#1E78A6";
   }
-  const ROW = (h: number) => h - START_HOUR + 2; // header occupies row 1
-  const COL = (aid: string) => colOf(aid) + 2; // time labels occupy column 1
 
   function newBookingHref(
     assetId: string,
@@ -294,25 +314,30 @@ export default function ScheduleGrid({
               ))}
             </div>
 
-            {/* overlay: spanning, color-coded booking blocks (+ field fills) */}
-            <div
-              className="pointer-events-none absolute inset-0 grid"
-              style={{
-                gridTemplateColumns: `66px repeat(${assets.length}, 140px)`,
-                gridTemplateRows: `repeat(${hours.length + 1}, 58px)`,
-              }}
-            >
-              {overlayItems.map((it, i) => (
-                <OverlayBlock
-                  key={`${it.booking.id}@${it.assetId}-${i}`}
-                  b={it.booking}
-                  col={COL(it.assetId)}
-                  rowStart={ROW(it.booking.start_hour)}
-                  rowEnd={ROW(it.booking.end_hour)}
-                  color={colorOf(it.booking)}
-                  onEdit={(b) => setEditing(toEditable(b))}
-                />
-              ))}
+            {/* overlay: minute-precise, color-coded booking blocks (+ field fills) */}
+            <div className="pointer-events-none absolute inset-0">
+              {overlayItems.map((it, i) => {
+                const ci = colOf(it.assetId);
+                if (ci < 0) return null;
+                const s = etHM(it.booking.start_time);
+                const e = etHM(it.booking.end_time);
+                const maxMin = (END_HOUR + 1 - START_HOUR) * 60;
+                let startMin = (s.h - START_HOUR) * 60 + s.m;
+                let endMin = (e.h - START_HOUR) * 60 + e.m;
+                startMin = Math.max(0, Math.min(startMin, maxMin));
+                endMin = Math.max(startMin + 15, Math.min(endMin, maxMin));
+                return (
+                  <OverlayBlock
+                    key={`${it.booking.id}@${it.assetId}-${i}`}
+                    b={it.booking}
+                    left={GUTTER_W + ci * COL_W}
+                    top={HEADER_H + (startMin / 60) * ROW_H}
+                    height={((endMin - startMin) / 60) * ROW_H}
+                    color={colorOf(it.booking)}
+                    onEdit={(b) => setEditing(toEditable(b))}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
@@ -454,36 +479,41 @@ function RowFragment({
 
 function OverlayBlock({
   b,
-  col,
-  rowStart,
-  rowEnd,
+  left,
+  top,
+  height,
   color,
   onEdit,
 }: {
   b: GridBooking;
-  col: number;
-  rowStart: number;
-  rowEnd: number;
+  left: number;
+  top: number;
+  height: number;
   color: string | null;
   onEdit: (b: GridBooking) => void;
 }) {
+  const h = Math.max(height - 6, 16);
   const place: React.CSSProperties = {
-    gridColumn: col,
-    gridRow: `${rowStart} / ${rowEnd}`,
+    position: "absolute",
+    left: left + 4,
+    top: top + 3,
+    width: COL_W - 8,
+    height: h,
   };
-  const tall = rowEnd - rowStart >= 2;
+  const showService = h >= 40; // ~>= 45 min
+  const showTime = h >= 58; // ~>= 1 hr
 
   if (color === null) {
     return (
       <button
         onClick={() => onEdit(b)}
         style={{ ...place, background: STRIPE, borderLeft: "4px solid #9CA3AF" }}
-        className="pointer-events-auto m-[3px] flex flex-col justify-center overflow-hidden rounded-[9px] border border-line-2 px-[9px] py-[6px] text-left hover:shadow-md"
+        className="pointer-events-auto flex flex-col justify-center overflow-hidden rounded-[9px] border border-line-2 px-[9px] py-[4px] text-left hover:shadow-md"
       >
-        <div className="truncate font-display text-[12.5px] font-extrabold text-muted">
+        <div className="truncate font-display text-[12px] font-extrabold text-muted">
           Blocked
         </div>
-        {tall && (
+        {showService && (
           <div className="truncate text-[11px] text-muted">Unavailable</div>
         )}
       </button>
@@ -498,7 +528,7 @@ function OverlayBlock({
         background: lightTint(color),
         borderLeft: `4px solid ${color}`,
       }}
-      className="pointer-events-auto m-[3px] flex flex-col justify-center overflow-hidden rounded-[9px] px-[9px] py-[6px] text-left transition-shadow hover:shadow-md"
+      className="pointer-events-auto flex flex-col justify-center overflow-hidden rounded-[9px] px-[9px] py-[4px] text-left transition-shadow hover:shadow-md"
     >
       <div className="flex items-center gap-[5px]">
         {b.status === "in_progress" && (
@@ -507,7 +537,7 @@ function OverlayBlock({
             style={{ background: color }}
           />
         )}
-        <span className="truncate font-display text-[12.5px] font-extrabold text-text">
+        <span className="truncate font-display text-[12px] font-extrabold text-text">
           {b.who}
         </span>
         {b.status === "no_show" && (
@@ -521,13 +551,15 @@ function OverlayBlock({
           </span>
         )}
       </div>
-      <div className="truncate text-[11px] text-muted">
-        {b.service_name}
-        {b.coach_name && b.coach_name !== "Unassigned"
-          ? ` · ${b.coach_name}`
-          : ""}
-      </div>
-      {tall && (
+      {showService && (
+        <div className="truncate text-[11px] text-muted">
+          {b.service_name}
+          {b.coach_name && b.coach_name !== "Unassigned"
+            ? ` · ${b.coach_name}`
+            : ""}
+        </div>
+      )}
+      {showTime && (
         <div className="truncate text-[10.5px] tabular-nums text-muted">
           {fmtClock(b.start_time)}–{fmtClock(b.end_time)}
         </div>
