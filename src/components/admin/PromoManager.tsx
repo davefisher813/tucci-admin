@@ -141,8 +141,8 @@ export default function PromoManager({ promos }: { promos: PromoRow[] }) {
                 onChange={(e) => setType(e.target.value as "percent" | "fixed")}
                 className="sel flex-1"
               >
-                <option value="percent">Percent off</option>
-                <option value="fixed">Amount off ($)</option>
+                <option value="percent">Percent Off</option>
+                <option value="fixed">Amount Off ($)</option>
               </select>
               <input
                 value={amount}
@@ -279,4 +279,3 @@ export default function PromoManager({ promos }: { promos: PromoRow[] }) {
     </div>
   );
 }
-
