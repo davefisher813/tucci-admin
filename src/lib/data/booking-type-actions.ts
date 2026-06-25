@@ -36,15 +36,20 @@ export async function createBookingType(input: {
   label: string;
   color: string;
   sort_order: number;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; bookingType?: BookingType }> {
   const supabase = await createClient();
-  const { error } = await supabase.from("booking_types").insert({
-    key: slugKey(input.label),
-    label: input.label.trim(),
-    color: input.color,
-    sort_order: input.sort_order,
-  });
-  return { error: error?.message ?? null };
+  const { data, error } = await supabase
+    .from("booking_types")
+    .insert({
+      key: slugKey(input.label),
+      label: input.label.trim(),
+      color: input.color,
+      sort_order: input.sort_order,
+    })
+    .select("id, key, label, color, is_block, is_active, sort_order")
+    .single();
+  if (error) return { error: error.message };
+  return { error: null, bookingType: data as BookingType };
 }
 
 export async function updateBookingType(
