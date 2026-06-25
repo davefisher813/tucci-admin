@@ -36,6 +36,7 @@ const GROUPS: Group[] = [
       { label: "Payroll", href: "/payroll" },
       { label: "Promo Codes", href: "/promo-codes" },
       { label: "Reports", href: "/reports" },
+      { label: "Space Value", href: "/space-value" },
     ],
   },
   {
