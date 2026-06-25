@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { moneyExact } from "@/lib/format";
 import { updateServiceRates } from "@/lib/data/pricing-actions";
+import { createService } from "@/lib/data/settings-actions";
 import type { Service } from "@/lib/data/resources";
 
 const CATEGORIES = [
@@ -17,6 +18,41 @@ export default function PricingManager({ services }: { services: Service[] }) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [sName, setSName] = useState("");
+  const [sCat, setSCat] = useState(CATEGORIES[0]);
+  const [sRate, setSRate] = useState("");
+
+  async function addService() {
+    setBusy(true);
+    setErr(null);
+    const dollars = parseFloat(sRate);
+    if (isNaN(dollars) || dollars < 0) {
+      setBusy(false);
+      return setErr("Enter a valid rate.");
+    }
+    const code = sName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 40);
+    const res = await createService({
+      code,
+      name: sName.trim(),
+      category: sCat,
+      base_rate_cents: Math.round(dollars * 100),
+      unit: "/hr",
+      min_duration_hours: 1,
+    });
+    setBusy(false);
+    if (res.error) return setErr(res.error);
+    setSName("");
+    setSRate("");
+    setShowAdd(false);
+    router.refresh();
+  }
 
   // group by category for display
   const grouped: Record<string, Service[]> = {};
@@ -33,12 +69,86 @@ export default function PricingManager({ services }: { services: Service[] }) {
         </div>
       )}
 
+      <div className="mb-[14px] flex items-center justify-between">
+        <div className="font-display text-[12px] font-bold text-muted">
+          {services.length} {services.length === 1 ? "Service" : "Services"}
+        </div>
+        <button
+          onClick={() => setShowAdd((s) => !s)}
+          className="inline-flex h-9 items-center rounded-[9px] border border-ink bg-ink px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-white"
+        >
+          {showAdd ? "Close" : "Add Service"}
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="mb-4 rounded-[16px] border border-line bg-paper p-4">
+          <div className="mb-[10px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+            New Service
+          </div>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-[12px] font-semibold text-muted">
+                Service Name
+              </label>
+              <input
+                value={sName}
+                onChange={(e) => setSName(e.target.value)}
+                placeholder="Full Cage — Hourly"
+                className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+              />
+            </div>
+            <div className="flex gap-[10px]">
+              <div className="flex flex-1 flex-col gap-[6px]">
+                <label className="text-[12px] font-semibold text-muted">
+                  Category
+                </label>
+                <select
+                  value={sCat}
+                  onChange={(e) => setSCat(e.target.value)}
+                  className="rounded-[9px] border border-line-2 bg-paper px-[11px] py-[11px] text-[14px]"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex w-[110px] flex-col gap-[6px]">
+                <label className="text-[12px] font-semibold text-muted">
+                  Rate ($/hr)
+                </label>
+                <input
+                  value={sRate}
+                  onChange={(e) => setSRate(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="75"
+                  className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+                />
+              </div>
+            </div>
+            <button
+              onClick={addService}
+              disabled={busy || !sName.trim() || !sRate.trim()}
+              className="rounded-[10px] bg-accent py-[13px] font-display text-[14px] font-extrabold text-white disabled:opacity-50"
+            >
+              {busy ? "Adding…" : "Add Service"}
+            </button>
+            <div className="text-[11.5px] leading-[1.4] text-muted">
+              To tie this service to a space type for the Space Value numbers,
+              set its space type in Settings after adding.
+            </div>
+          </div>
+        </div>
+      )}
+
       {services.length === 0 ? (
         <div className="rounded-[16px] border border-dashed border-line-2 bg-paper p-10 text-center text-muted">
           <b className="mb-[5px] block font-display text-[16px] text-text">
-            No services yet
+            No Services Yet
           </b>
-          Add services in Settings, then set rates here.
+          Add a service above to get started.
         </div>
       ) : (
         cats.map((cat) => (
