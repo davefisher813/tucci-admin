@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { moneyExact } from "@/lib/format";
-import { setUserRole, updateCoachProfile } from "@/lib/data/coach-actions";
+import { setUserRole, updateCoachProfile, createCoachWithLogin } from "@/lib/data/coach-actions";
 
 export type PersonRow = {
   id: string;
@@ -38,6 +38,24 @@ export default function CoachesManager({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+
+  async function addCoach() {
+    setBusy(true);
+    setErr(null);
+    const res = await createCoachWithLogin({
+      name: newName.trim(),
+      email: newEmail.trim(),
+    });
+    setBusy(false);
+    if (res.error) return setErr(res.error);
+    setNewName("");
+    setNewEmail("");
+    setShowAdd(false);
+    router.refresh();
+  }
 
   const coaches = people.filter((p) => p.role === "coach");
   const others = people.filter((p) => p.role !== "coach");
@@ -59,14 +77,66 @@ export default function CoachesManager({
         </div>
       )}
 
-      <div className="mb-[14px] font-display text-[19px] font-extrabold tracking-[-.01em] text-text">
-        Coaches
+      <div className="mb-[14px] flex items-center justify-between">
+        <div className="font-display text-[19px] font-extrabold tracking-[-.01em] text-text">
+          Coaches
+        </div>
+        <button
+          onClick={() => setShowAdd((s) => !s)}
+          className="inline-flex h-9 items-center rounded-[9px] border border-ink bg-ink px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-white"
+        >
+          {showAdd ? "Close" : "Add Coach"}
+        </button>
       </div>
+
+      {showAdd && (
+        <div className="mb-4 rounded-[16px] border border-line bg-paper p-4">
+          <div className="mb-[10px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+            New Coach
+          </div>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-[12px] font-semibold text-muted">
+                Full Name
+              </label>
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Mike Carter"
+                className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+              />
+            </div>
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-[12px] font-semibold text-muted">
+                Email (Creates Their Login)
+              </label>
+              <input
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="mike@tucci.com"
+                className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+              />
+            </div>
+            <button
+              onClick={addCoach}
+              disabled={busy || !newName.trim() || !newEmail.trim()}
+              className="rounded-[10px] bg-accent py-[13px] font-display text-[14px] font-extrabold text-white disabled:opacity-50"
+            >
+              {busy ? "Adding…" : "Add Coach"}
+            </button>
+            <div className="text-[11.5px] leading-[1.4] text-muted">
+              Creating a login requires the Supabase service key in Vercel. For
+              a coach without a login, assign them by name directly on a booking.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6 overflow-hidden rounded-[16px] border border-line bg-paper">
         {coaches.length === 0 ? (
           <div className="px-4 py-6 text-center text-[13px] text-muted">
-            No coaches yet. Set someone&apos;s role to Coach in the People
-            section below.
+            No Coaches Yet. Add one above, or set someone&apos;s role to Coach in
+            the People section below.
           </div>
         ) : (
           coaches.map((c) => {
