@@ -35,9 +35,29 @@ type Joined = {
   families: { family_name: string } | null;
 };
 
+// Booking times are stored in UTC. The grid is laid out in the facility's
+// local time (Eastern), computed here so it is correct no matter where the
+// server runs. Handles EST/EDT automatically.
+const FACILITY_TZ = "America/New_York";
+function zonedParts(iso: string): { h: number; m: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: FACILITY_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(iso));
+  const get = (t: string) =>
+    Number(parts.find((p) => p.type === t)?.value ?? "0");
+  let h = get("hour");
+  if (h === 24) h = 0;
+  return { h, m: get("minute") };
+}
+function startHour(iso: string): number {
+  return zonedParts(iso).h;
+}
 function endHourCeil(iso: string): number {
-  const d = new Date(iso);
-  return d.getMinutes() > 0 ? d.getHours() + 1 : d.getHours();
+  const { h, m } = zonedParts(iso);
+  return m > 0 ? h + 1 : h;
 }
 
 export default async function SchedulePage({
@@ -102,7 +122,7 @@ export default async function SchedulePage({
         : "Session"),
     service_name: b.services?.name ?? "—",
     coach_name: b.coach?.full_name ?? b.coach_name ?? "Unassigned",
-    start_hour: new Date(b.start_time).getHours(),
+    start_hour: startHour(b.start_time),
     end_hour: endHourCeil(b.end_time),
     half_slot: b.half_slot,
     booking_type: b.booking_type ?? null,
