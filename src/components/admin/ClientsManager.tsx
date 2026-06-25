@@ -8,6 +8,7 @@ import {
   createAthlete,
   deleteAthlete,
 } from "@/lib/data/family-actions";
+import { formatPhone } from "@/lib/format";
 
 export type FamilyRow = {
   id: string;
@@ -190,7 +191,7 @@ export default function ClientsManager({
                     </div>
                     <div className="text-[12px] text-muted">
                       {kids.length} {kids.length === 1 ? "athlete" : "athletes"}
-                      {f.primary_phone ? ` · ${f.primary_phone}` : ""}
+                      {f.primary_phone ? ` · ${formatPhone(f.primary_phone)}` : ""}
                     </div>
                   </div>
                   <span
