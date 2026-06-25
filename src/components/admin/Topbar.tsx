@@ -22,7 +22,15 @@ const TITLES: Record<string, string> = {
   settings: "Settings",
 };
 
-export default function Topbar({ user }: { user: CurrentUser }) {
+export default function Topbar({
+  user,
+  sidebarCollapsed = false,
+  onReopenSidebar,
+}: {
+  user: CurrentUser;
+  sidebarCollapsed?: boolean;
+  onReopenSidebar?: () => void;
+}) {
   const pathname = usePathname();
   const key = pathname.split("/").filter(Boolean)[0] ?? "today";
   const title = TITLES[key] ?? "Today";
@@ -37,6 +45,17 @@ export default function Topbar({ user }: { user: CurrentUser }) {
 
   return (
     <header className="sticky top-0 z-20 flex items-center gap-[14px] border-b border-line bg-bg px-4 py-[14px] pl-16 md:px-[26px] md:pl-[26px]">
+      {sidebarCollapsed && (
+        <button
+          onClick={onReopenSidebar}
+          aria-label="Open sidebar"
+          className="hidden h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[9px] border border-line bg-paper text-text hover:border-accent md:flex"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 6h18M3 12h18M3 18h18" />
+          </svg>
+        </button>
+      )}
       <div>
         <div className="font-display text-[10px] font-extrabold tracking-[.02em] text-accent">
           Tucci Elite
