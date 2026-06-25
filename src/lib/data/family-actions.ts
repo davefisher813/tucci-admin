@@ -58,17 +58,29 @@ export async function createAthlete(input: {
   first_name: string;
   last_name: string;
   position: string;
-}): Promise<ActionResult> {
+}): Promise<ActionResult & { athlete?: { id: string; family_id: string; first_name: string; last_name: string } }> {
   const supabase = await createClient();
-  const { error } = await supabase.from("athletes").insert({
-    family_id: input.family_id,
-    first_name: input.first_name,
-    last_name: input.last_name,
-    position: input.position,
-    is_active: true,
-  });
+  const { data, error } = await supabase
+    .from("athletes")
+    .insert({
+      family_id: input.family_id,
+      first_name: input.first_name,
+      last_name: input.last_name,
+      position: input.position,
+      is_active: true,
+    })
+    .select("id, family_id, first_name, last_name")
+    .single();
   if (error) return { error: error.message };
-  return { error: null };
+  return {
+    error: null,
+    athlete: data as {
+      id: string;
+      family_id: string;
+      first_name: string;
+      last_name: string;
+    },
+  };
 }
 
 export async function deleteAthlete(id: string): Promise<ActionResult> {
