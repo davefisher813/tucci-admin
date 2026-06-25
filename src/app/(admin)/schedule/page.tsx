@@ -25,6 +25,7 @@ type Joined = {
   total_cents: number | null;
   booking_type: string | null;
   half_slot: number | null;
+  coach_name: string | null;
   services: { name: string } | null;
   coach: { full_name: string } | null;
   families: { family_name: string } | null;
@@ -59,7 +60,7 @@ export default async function SchedulePage({
     .from("bookings")
     .select(
       `id, booking_number, asset_id, coach_id, service_id, start_time, end_time,
-       status, total_cents, booking_type, half_slot,
+       status, total_cents, booking_type, half_slot, coach_name,
        services ( name ),
        coach:users!bookings_coach_id_fkey ( full_name ),
        families ( family_name )`
@@ -89,7 +90,7 @@ export default async function SchedulePage({
             .replace(/\b\w/g, (c) => c.toUpperCase())
         : "Session"),
     service_name: b.services?.name ?? "—",
-    coach_name: b.coach?.full_name ?? "Unassigned",
+    coach_name: b.coach?.full_name ?? b.coach_name ?? "Unassigned",
     start_hour: new Date(b.start_time).getHours(),
     end_hour: endHourCeil(b.end_time),
     half_slot: b.half_slot,
