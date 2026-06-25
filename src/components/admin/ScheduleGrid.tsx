@@ -511,7 +511,7 @@ function OverlayBlock({
         className="pointer-events-auto flex flex-col justify-center overflow-hidden rounded-[9px] border border-line-2 px-[9px] py-[4px] text-left hover:shadow-md"
       >
         <div className="truncate font-display text-[12px] font-extrabold text-muted">
-          Blocked
+          {b.notes?.trim() ? b.notes : "Blocked"}
         </div>
         {showService && (
           <div className="truncate text-[11px] text-muted">Unavailable</div>
@@ -806,7 +806,7 @@ function AgendaRow({
             }`}
           />
           <span className="truncate font-display text-[15px] font-bold text-text">
-            {b.who}
+            {isBlock && b.notes?.trim() ? b.notes : b.who}
           </span>
           {b.status === "no_show" && (
             <span className="flex-shrink-0 rounded-[4px] bg-danger/[.12] px-[5px] text-[9px] font-extrabold uppercase tracking-[.03em] text-danger">
