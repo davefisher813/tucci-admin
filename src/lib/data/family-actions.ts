@@ -8,6 +8,10 @@ export async function createFamily(input: {
   family_name: string;
   primary_email: string | null;
   primary_phone: string | null;
+  client_type?: string;
+  sport?: string | null;
+  point_of_contact?: string | null;
+  notes?: string | null;
 }): Promise<ActionResult> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -16,6 +20,10 @@ export async function createFamily(input: {
       family_name: input.family_name,
       primary_email: input.primary_email,
       primary_phone: input.primary_phone,
+      client_type: input.client_type ?? "family",
+      sport: input.sport ?? null,
+      point_of_contact: input.point_of_contact ?? null,
+      notes: input.notes ?? null,
       is_active: true,
     })
     .select("id")
