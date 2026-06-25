@@ -78,7 +78,15 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({
+  collapsed = false,
+  onToggle,
+  hydrated = true,
+}: {
+  collapsed?: boolean;
+  onToggle?: () => void;
+  hydrated?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -93,11 +101,24 @@ export default function Sidebar() {
         </svg>
       </button>
 
-      <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r border-line bg-paper md:flex">
-        <div className="flex items-center gap-[10px] px-[18px] pb-[14px] pt-[18px]">
-          <div className="font-display text-lg font-black leading-tight text-text">
+      <aside
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-line bg-paper transition-[width] duration-200 md:flex ${
+          collapsed ? "w-0 border-r-0" : "w-[248px]"
+        }`}
+      >
+        <div className="flex items-center justify-between px-[18px] pb-[14px] pt-[18px]">
+          <div className="whitespace-nowrap font-display text-lg font-black leading-tight text-text">
             Tucci Elite
           </div>
+          <button
+            onClick={onToggle}
+            aria-label="Collapse sidebar"
+            className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[8px] border border-line text-muted hover:text-text"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
         </div>
         <NavList />
       </aside>
