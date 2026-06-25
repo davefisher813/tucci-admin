@@ -11,7 +11,8 @@ import {
   type SeriesInfo,
   type BookingUpdate,
 } from "@/lib/data/bulk-booking-actions";
-import type { Asset, Coach, Service } from "@/lib/data/resources";
+import type { Asset, Coach, Service, FamilyLite } from "@/lib/data/resources";
+import type { BookingType } from "@/lib/data/booking-type-actions";
 
 export type EditableBooking = {
   id: string;
@@ -19,6 +20,9 @@ export type EditableBooking = {
   asset_id: string;
   coach_id: string | null;
   service_id: string | null;
+  family_id: string | null;
+  booking_type: string | null;
+  notes: string | null;
   start_time: string;
   end_time: string;
   status: string;
@@ -38,18 +42,25 @@ export default function EditBookingModal({
   assets,
   coaches,
   services,
+  families,
+  bookingTypes,
   onClose,
 }: {
   booking: EditableBooking;
   assets: Asset[];
   coaches: Coach[];
   services: Service[];
+  families: FamilyLite[];
+  bookingTypes: BookingType[];
   onClose: () => void;
 }) {
   const router = useRouter();
   const [assetId, setAssetId] = useState(booking.asset_id);
   const [coachId, setCoachId] = useState(booking.coach_id ?? "");
   const [serviceId, setServiceId] = useState(booking.service_id ?? "");
+  const [clientId, setClientId] = useState(booking.family_id ?? "");
+  const [typeKey, setTypeKey] = useState(booking.booking_type ?? "");
+  const [notes, setNotes] = useState(booking.notes ?? "");
   const [start, setStart] = useState(toLocalInput(booking.start_time));
   const [end, setEnd] = useState(toLocalInput(booking.end_time));
   const [busy, setBusy] = useState(false);
@@ -78,6 +89,26 @@ export default function EditBookingModal({
     const startISO = new Date(start).toISOString();
     const endISO = new Date(end).toISOString();
 
+    // Always save this booking in full, including its details.
+    const res = await updateBooking({
+      id: booking.id,
+      asset_id: assetId,
+      coach_id: coachId || null,
+      service_id: serviceId || null,
+      family_id: clientId || null,
+      booking_type: typeKey || null,
+      notes: notes.trim() || null,
+      start_time: startISO,
+      end_time: endISO,
+    });
+    if (res.error) {
+      setBusy(false);
+      setErr(res.error);
+      return;
+    }
+
+    // When applying to the whole series, propagate space/coach/service/time
+    // to the remaining future bookings.
     if (applyFuture && series) {
       const ns = new Date(start);
       const sh = ns.getHours();
@@ -87,31 +118,42 @@ export default function EditBookingModal({
         startISO !== new Date(booking.start_time).toISOString() ||
         endISO !== new Date(booking.end_time).toISOString();
 
-      const updates: BookingUpdate[] = series.future.map((f) => {
-        const u: BookingUpdate = { id: f.id };
-        if (assetId !== booking.asset_id) u.asset_id = assetId;
-        if ((coachId || null) !== booking.coach_id) u.coach_id = coachId || null;
-        if ((serviceId || null) !== booking.service_id)
-          u.service_id = serviceId || null;
-        if (timeChanged) {
-          const d = new Date(f.start_time);
-          const s2 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, sm, 0, 0);
-          const e2 = new Date(s2.getTime() + durMs);
-          u.start_time = s2.toISOString();
-          u.end_time = e2.toISOString();
-        }
-        return u;
-      });
+      const updates: BookingUpdate[] = series.future
+        .filter((f) => f.id !== booking.id)
+        .map((f) => {
+          const u: BookingUpdate = { id: f.id };
+          if (assetId !== booking.asset_id) u.asset_id = assetId;
+          if ((coachId || null) !== booking.coach_id)
+            u.coach_id = coachId || null;
+          if ((serviceId || null) !== booking.service_id)
+            u.service_id = serviceId || null;
+          if (timeChanged) {
+            const d = new Date(f.start_time);
+            const s2 = new Date(
+              d.getFullYear(),
+              d.getMonth(),
+              d.getDate(),
+              sh,
+              sm,
+              0,
+              0
+            );
+            const e2 = new Date(s2.getTime() + durMs);
+            u.start_time = s2.toISOString();
+            u.end_time = e2.toISOString();
+          }
+          return u;
+        });
 
-      const res = await updateManyBookings(updates);
+      const r2 = await updateManyBookings(updates);
       setBusy(false);
-      if (res.error) {
-        setErr(res.error);
+      if (r2.error) {
+        setErr(r2.error);
         return;
       }
-      if (res.skipped.length > 0) {
+      if (r2.skipped.length > 0) {
         setErr(
-          `Updated ${res.updated}, skipped ${res.skipped.length} (conflict). The rest are saved.`
+          `Updated ${r2.updated + 1}, skipped ${r2.skipped.length} (conflict). The rest are saved.`
         );
         router.refresh();
         return;
@@ -121,19 +163,7 @@ export default function EditBookingModal({
       return;
     }
 
-    const res = await updateBooking({
-      id: booking.id,
-      asset_id: assetId,
-      coach_id: coachId || null,
-      service_id: serviceId || null,
-      start_time: startISO,
-      end_time: endISO,
-    });
     setBusy(false);
-    if (res.error) {
-      setErr(res.error);
-      return;
-    }
     router.refresh();
     onClose();
   }
@@ -274,6 +304,34 @@ export default function EditBookingModal({
               ))}
             </select>
           </Field>
+          <Field label="Client">
+            <select
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              className="sel"
+            >
+              <option value="">None</option>
+              {families.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.family_name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Booking Type">
+            <select
+              value={typeKey}
+              onChange={(e) => setTypeKey(e.target.value)}
+              className="sel"
+            >
+              <option value="">Default</option>
+              {bookingTypes.map((t) => (
+                <option key={t.id} value={t.key}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Start">
               <input
@@ -292,6 +350,16 @@ export default function EditBookingModal({
               />
             </Field>
           </div>
+          <Field label="Notes">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              className="sel"
+              style={{ minHeight: "56px", resize: "vertical" }}
+              placeholder="Notes for this booking"
+            />
+          </Field>
           {applyFuture && (
             <p className="text-[11.5px] text-muted">
               Time changes re-apply to each future date; space, service, and
