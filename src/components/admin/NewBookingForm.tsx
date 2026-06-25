@@ -200,6 +200,12 @@ export default function NewBookingForm({
   const [ncEmail, setNcEmail] = useState("");
   const [ncLogin, setNcLogin] = useState(false);
   const [nfName, setNfName] = useState("");
+  const [nfType, setNfType] = useState<"family" | "organization" | "team">(
+    "family"
+  );
+  const [nfSport, setNfSport] = useState("");
+  const [nfPoc, setNfPoc] = useState("");
+  const [nfNotes, setNfNotes] = useState("");
   const [nfEmail, setNfEmail] = useState("");
   const [nfPhone, setNfPhone] = useState("");
   const [nfAths, setNfAths] = useState<{ first: string; last: string }[]>([
@@ -264,28 +270,41 @@ export default function NewBookingForm({
   }
 
   async function saveNewFamily() {
-    if (!nfName.trim()) return setAddErr("Family name is required.");
+    const nameLabel =
+      nfType === "organization"
+        ? "Organization name"
+        : nfType === "team"
+        ? "Team name"
+        : "Family name";
+    if (!nfName.trim()) return setAddErr(`${nameLabel} is required.`);
     setAddBusy(true);
     setAddErr(null);
     const res = await createFamily({
       family_name: nfName.trim(),
       primary_email: nfEmail.trim() || null,
       primary_phone: nfPhone.trim() || null,
+      client_type: nfType,
+      sport: nfSport.trim() || null,
+      point_of_contact: nfPoc.trim() || null,
+      notes: nfNotes.trim() || null,
     });
     if (res.error || !res.id) {
       setAddBusy(false);
-      return setAddErr(res.error ?? "Could not add family.");
+      return setAddErr(res.error ?? "Could not add client.");
     }
     const fid = res.id;
     const newAths: AthleteLite[] = [];
-    for (const a of nfAths.filter((x) => x.first.trim() && x.last.trim())) {
-      const ar = await createAthlete({
-        family_id: fid,
-        first_name: a.first.trim(),
-        last_name: a.last.trim(),
-        position: "unknown",
-      });
-      if (ar.athlete) newAths.push(ar.athlete);
+    // Organizations have no roster of their own athletes.
+    if (nfType !== "organization") {
+      for (const a of nfAths.filter((x) => x.first.trim() && x.last.trim())) {
+        const ar = await createAthlete({
+          family_id: fid,
+          first_name: a.first.trim(),
+          last_name: a.last.trim(),
+          position: "unknown",
+        });
+        if (ar.athlete) newAths.push(ar.athlete);
+      }
     }
     setAddBusy(false);
     setFamilies((p) => [...p, { id: fid, family_name: nfName.trim() }]);
@@ -293,6 +312,10 @@ export default function NewBookingForm({
     setFamilyId(fid);
     setAthleteIds([]);
     setNfName("");
+    setNfType("family");
+    setNfSport("");
+    setNfPoc("");
+    setNfNotes("");
     setNfEmail("");
     setNfPhone("");
     setNfAths([{ first: "", last: "" }]);
@@ -1128,7 +1151,7 @@ export default function NewBookingForm({
                 + New Coach
               </button>
             </Field>
-            <Field label="Family">
+            <Field label="Client">
               <select
                 value={familyId}
                 onChange={(e) => {
@@ -1149,7 +1172,7 @@ export default function NewBookingForm({
                 onClick={() => openPanel("family")}
                 className="mt-1 font-display text-[11px] font-extrabold text-accent"
               >
-                + New Family
+                + New Client
               </button>
             </Field>
           </div>
@@ -1202,22 +1225,75 @@ export default function NewBookingForm({
 
           {addPanel === "family" && (
             <AddCard
-              title="New Family"
+              title="New Client"
               busy={addBusy}
               err={addErr}
               onCancel={() => setAddPanel("")}
               onSave={saveNewFamily}
             >
               <div className="field">
-                <label className="lab">Family / Last Name</label>
+                <label className="lab">Client Type</label>
+                <div className="seg">
+                  {(
+                    [
+                      ["family", "Family"],
+                      ["organization", "Organization"],
+                      ["team", "Team"],
+                    ] as const
+                  ).map(([val, lbl]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setNfType(val)}
+                      className={`seg-btn${nfType === val ? " on" : ""}`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="field mt-3">
+                <label className="lab">
+                  {nfType === "organization"
+                    ? "Organization Name"
+                    : nfType === "team"
+                    ? "Team Name"
+                    : "Family / Last Name"}
+                </label>
                 <input
                   className="sel"
                   value={nfName}
                   onChange={(e) => setNfName(e.target.value)}
-                  placeholder="e.g. Delgado"
+                  placeholder={
+                    nfType === "organization"
+                      ? "e.g. Stamford Little League"
+                      : nfType === "team"
+                      ? "e.g. Stamford Thunder 12U"
+                      : "e.g. Delgado"
+                  }
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="field">
+                  <label className="lab">Sport</label>
+                  <input
+                    className="sel"
+                    value={nfSport}
+                    onChange={(e) => setNfSport(e.target.value)}
+                    placeholder="e.g. Baseball"
+                  />
+                </div>
+                <div className="field">
+                  <label className="lab">Point of Contact</label>
+                  <input
+                    className="sel"
+                    value={nfPoc}
+                    onChange={(e) => setNfPoc(e.target.value)}
+                    placeholder="Contact name"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
                 <div className="field">
                   <label className="lab">Email</label>
                   <input
@@ -1225,7 +1301,7 @@ export default function NewBookingForm({
                     type="email"
                     value={nfEmail}
                     onChange={(e) => setNfEmail(e.target.value)}
-                    placeholder="parent@email.com"
+                    placeholder="contact@email.com"
                   />
                 </div>
                 <div className="field">
@@ -1239,56 +1315,76 @@ export default function NewBookingForm({
                   />
                 </div>
               </div>
-              <p className="lab">Athletes</p>
-              {nfAths.map((a, i) => (
-                <div key={i} className="mb-2 grid grid-cols-[1fr_1fr_auto] gap-2">
-                  <input
-                    className="sel"
-                    value={a.first}
-                    onChange={(e) =>
-                      setNfAths((p) =>
-                        p.map((x, j) =>
-                          j === i ? { ...x, first: e.target.value } : x
-                        )
-                      )
-                    }
-                    placeholder="First"
-                  />
-                  <input
-                    className="sel"
-                    value={a.last}
-                    onChange={(e) =>
-                      setNfAths((p) =>
-                        p.map((x, j) =>
-                          j === i ? { ...x, last: e.target.value } : x
-                        )
-                      )
-                    }
-                    placeholder="Last"
-                  />
+              {nfType !== "organization" && (
+                <div className="mt-3">
+                  <p className="lab">
+                    {nfType === "team" ? "Roster" : "Athletes"}
+                  </p>
+                  {nfAths.map((a, i) => (
+                    <div
+                      key={i}
+                      className="mb-2 grid grid-cols-[1fr_1fr_auto] gap-2"
+                    >
+                      <input
+                        className="sel"
+                        value={a.first}
+                        onChange={(e) =>
+                          setNfAths((p) =>
+                            p.map((x, j) =>
+                              j === i ? { ...x, first: e.target.value } : x
+                            )
+                          )
+                        }
+                        placeholder="First"
+                      />
+                      <input
+                        className="sel"
+                        value={a.last}
+                        onChange={(e) =>
+                          setNfAths((p) =>
+                            p.map((x, j) =>
+                              j === i ? { ...x, last: e.target.value } : x
+                            )
+                          )
+                        }
+                        placeholder="Last"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNfAths((p) =>
+                            p.length <= 1 ? p : p.filter((_, j) => j !== i)
+                          )
+                        }
+                        className="px-2 font-display text-[12px] font-bold text-muted"
+                        aria-label="Remove athlete"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                   <button
                     type="button"
                     onClick={() =>
-                      setNfAths((p) =>
-                        p.length <= 1 ? p : p.filter((_, j) => j !== i)
-                      )
+                      setNfAths((p) => [...p, { first: "", last: "" }])
                     }
-                    className="px-2 font-display text-[12px] font-bold text-muted"
-                    aria-label="Remove athlete"
+                    className="font-display text-[11px] font-extrabold text-accent"
                   >
-                    ✕
+                    + Add Athlete
                   </button>
                 </div>
-              ))}
-              <button
-                type="button"
-                onClick={() =>
-                  setNfAths((p) => [...p, { first: "", last: "" }])
-                }
-                className="font-display text-[11px] font-extrabold text-accent"
-              >
-                + Add Athlete
-              </button>
+              )}
+              <div className="field mt-3">
+                <label className="lab">Notes</label>
+                <textarea
+                  className="sel"
+                  style={{ height: "auto", minHeight: "68px" }}
+                  rows={3}
+                  value={nfNotes}
+                  onChange={(e) => setNfNotes(e.target.value)}
+                  placeholder="Anything worth recording about this client"
+                />
+              </div>
             </AddCard>
           )}
 
