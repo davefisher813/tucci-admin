@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import type { Service } from "@/lib/data/resources";
 
 type ActionResult = { error: string | null };
 
@@ -146,19 +147,25 @@ export async function createService(input: {
   base_rate_cents: number;
   unit: string;
   min_duration_hours: number;
-}): Promise<ActionResult> {
+}): Promise<ActionResult & { service?: Service }> {
   const supabase = await createClient();
-  const { error } = await supabase.from("services").insert({
-    code: input.code,
-    name: input.name,
-    category: input.category,
-    base_rate_cents: input.base_rate_cents,
-    unit: input.unit,
-    min_duration_hours: input.min_duration_hours,
-    is_active: true,
-  });
+  const { data, error } = await supabase
+    .from("services")
+    .insert({
+      code: input.code,
+      name: input.name,
+      category: input.category,
+      base_rate_cents: input.base_rate_cents,
+      unit: input.unit,
+      min_duration_hours: input.min_duration_hours,
+      is_active: true,
+    })
+    .select(
+      "id, code, name, category, base_rate_cents, peak_rate_cents, min_duration_hours, applies_to_asset_type"
+    )
+    .single();
   if (error) return { error: error.message };
-  return { error: null };
+  return { error: null, service: data as Service };
 }
 
 export async function updateService(input: {
