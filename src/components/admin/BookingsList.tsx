@@ -1,326 +1,324 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { moneyExact, clock } from "@/lib/format";
-import EditBookingModal, {
-  type EditableBooking,
-} from "@/components/admin/EditBookingModal";
-import { cancelManyBookings } from "@/lib/data/bulk-booking-actions";
-import type { Asset, Coach, Service, FamilyLite } from "@/lib/data/resources";
-import type { BookingType } from "@/lib/data/booking-type-actions";
+import { moneyExact } from "@/lib/format";
+import { updateServiceRates } from "@/lib/data/pricing-actions";
+import { createService } from "@/lib/data/settings-actions";
+import type { Service } from "@/lib/data/resources";
 
-export type BookingListRow = {
-  id: string;
-  booking_number: number | null;
-  asset_id: string;
-  coach_id: string | null;
-  service_id: string | null;
-  family_id: string | null;
-  booking_type: string | null;
-  notes: string | null;
-  start_time: string;
-  end_time: string;
-  status: string;
-  total_cents: number;
-  who: string;
-  service_name: string;
-  coach_name: string;
-  space_name: string;
-};
+const CATEGORIES = [
+  "Cage Rentals",
+  "Lessons",
+  "Memberships",
+  "Field & Facility",
+];
 
-type Filter = "upcoming" | "past" | "cancelled" | "all";
-
-const STATUS_STYLE: Record<string, string> = {
-  confirmed: "text-accent",
-  in_progress: "text-accent",
-  completed: "text-muted",
-  no_show: "text-danger",
-  cancelled: "text-muted line-through",
-  tentative: "text-gold",
-};
-
-export default function BookingsList({
-  bookings,
-  assets,
-  coaches,
-  services,
-  families,
-  bookingTypes,
-}: {
-  bookings: BookingListRow[];
-  assets: Asset[];
-  coaches: Coach[];
-  services: Service[];
-  families: FamilyLite[];
-  bookingTypes: BookingType[];
-}) {
+export default function PricingManager({ services }: { services: Service[] }) {
   const router = useRouter();
-  const [filter, setFilter] = useState<Filter>("upcoming");
-  const [q, setQ] = useState("");
-  const [editing, setEditing] = useState<EditableBooking | null>(null);
-
-  const [selectMode, setSelectMode] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [bulkErr, setBulkErr] = useState<string | null>(null);
-  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [sName, setSName] = useState("");
+  const [sCat, setSCat] = useState(CATEGORIES[0]);
+  const [sRate, setSRate] = useState("");
 
-  const now = Date.now();
-
-  const filtered = useMemo(() => {
-    let rows = bookings;
-    if (filter === "upcoming")
-      rows = rows.filter(
-        (b) =>
-          b.status !== "cancelled" && new Date(b.start_time).getTime() >= now
-      );
-    else if (filter === "past")
-      rows = rows.filter(
-        (b) =>
-          b.status !== "cancelled" && new Date(b.start_time).getTime() < now
-      );
-    else if (filter === "cancelled")
-      rows = rows.filter((b) => b.status === "cancelled");
-
-    const term = q.trim().toLowerCase();
-    if (term)
-      rows = rows.filter(
-        (b) =>
-          b.who.toLowerCase().includes(term) ||
-          b.service_name.toLowerCase().includes(term) ||
-          b.coach_name.toLowerCase().includes(term) ||
-          b.space_name.toLowerCase().includes(term)
-      );
-    return rows;
-  }, [bookings, filter, q, now]);
-
-  function dayLabel(iso: string) {
-    return new Date(iso).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  }
-
-  function toggleSel(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function selectAllVisible() {
-    setSelected(new Set(filtered.filter((b) => b.status !== "cancelled").map((b) => b.id)));
-  }
-
-  function exitSelect() {
-    setSelectMode(false);
-    setSelected(new Set());
-    setConfirmCancel(false);
-    setBulkErr(null);
-  }
-
-  async function cancelSelected() {
+  async function addService() {
     setBusy(true);
-    setBulkErr(null);
-    const res = await cancelManyBookings([...selected]);
-    setBusy(false);
-    if (res.error) {
-      setBulkErr(res.error);
-      return;
+    setErr(null);
+    const dollars = parseFloat(sRate);
+    if (isNaN(dollars) || dollars < 0) {
+      setBusy(false);
+      return setErr("Enter a valid rate.");
     }
-    exitSelect();
+    const code = sName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 40);
+    const res = await createService({
+      code,
+      name: sName.trim(),
+      category: sCat,
+      base_rate_cents: Math.round(dollars * 100),
+      unit: "/hr",
+      min_duration_hours: 1,
+    });
+    setBusy(false);
+    if (res.error) return setErr(res.error);
+    setSName("");
+    setSRate("");
+    setShowAdd(false);
     router.refresh();
   }
 
-  const TABS: { key: Filter; label: string }[] = [
-    { key: "upcoming", label: "Upcoming" },
-    { key: "past", label: "Past" },
-    { key: "cancelled", label: "Cancelled" },
-    { key: "all", label: "All" },
-  ];
+  // group by category for display
+  const grouped: Record<string, Service[]> = {};
+  for (const s of services) {
+    (grouped[s.category] ??= []).push(s);
+  }
+  const cats = Object.keys(grouped).sort();
 
   return (
-    <div className="mx-auto max-w-[860px]">
-      <div className="mb-3 flex items-center gap-2">
-        <div className="flex flex-1 gap-2 overflow-x-auto">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setFilter(t.key)}
-              className={`whitespace-nowrap rounded-[9px] border px-[14px] py-[7px] font-display text-[12px] font-extrabold tracking-[.02em] ${
-                filter === t.key
-                  ? "border-ink bg-ink text-white"
-                  : "border-line-2 bg-paper text-muted"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+    <div className="mx-auto max-w-[760px]">
+      {err && (
+        <div className="mb-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[13px] text-danger">
+          {err}
+        </div>
+      )}
+
+      <div className="mb-[14px] flex items-center justify-between">
+        <div className="font-display text-[12px] font-bold text-muted">
+          {services.length} {services.length === 1 ? "Service" : "Services"}
         </div>
         <button
-          onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-          className={`whitespace-nowrap rounded-[9px] border px-[14px] py-[7px] font-display text-[12px] font-extrabold tracking-[.02em] ${
-            selectMode
-              ? "border-accent bg-accent text-white"
-              : "border-line-2 bg-paper text-text hover:border-accent"
-          }`}
+          onClick={() => setShowAdd((s) => !s)}
+          className="inline-flex h-9 items-center rounded-[9px] border border-ink bg-ink px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-white"
         >
-          {selectMode ? "Done" : "Select"}
+          {showAdd ? "Close" : "Add Service"}
         </button>
       </div>
 
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search by family, service, coach, space"
-        className="mb-3 w-full rounded-[9px] border border-line-2 bg-paper px-3 py-[9px] text-[14px] text-text outline-none focus:border-accent"
-      />
-
-      {selectMode && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[12px] border border-accent/30 bg-accent/[.06] px-3 py-[10px]">
-          <div className="flex-1 font-display text-[13px] font-extrabold text-text">
-            {selected.size} selected
+      {showAdd && (
+        <div className="mb-4 rounded-[16px] border border-line bg-paper p-4">
+          <div className="mb-[10px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+            New Service
           </div>
-          <button
-            onClick={selectAllVisible}
-            className="rounded-[8px] border border-line-2 bg-paper px-[12px] py-[7px] font-display text-[11px] font-extrabold text-text hover:border-accent"
-          >
-            Select all shown
-          </button>
-          {confirmCancel ? (
-            <>
-              <button
-                onClick={cancelSelected}
-                disabled={busy || selected.size === 0}
-                className="rounded-[8px] border border-danger bg-danger px-[12px] py-[7px] font-display text-[11px] font-extrabold text-white disabled:opacity-50"
-              >
-                {busy ? "Cancelling…" : `Cancel ${selected.size}`}
-              </button>
-              <button
-                onClick={() => setConfirmCancel(false)}
-                className="rounded-[8px] border border-line-2 bg-paper px-[12px] py-[7px] font-display text-[11px] font-extrabold text-text"
-              >
-                Keep
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setConfirmCancel(true)}
-              disabled={selected.size === 0}
-              className="rounded-[8px] border border-line-2 bg-paper px-[12px] py-[7px] font-display text-[11px] font-extrabold text-danger hover:border-danger disabled:opacity-40"
-            >
-              Cancel selected
-            </button>
-          )}
-        </div>
-      )}
-
-      {bulkErr && (
-        <div className="mb-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[13px] text-danger">
-          {bulkErr}
-        </div>
-      )}
-
-      <div className="overflow-hidden rounded-[16px] border border-line bg-paper">
-        {filtered.length === 0 ? (
-          <div className="px-4 py-8 text-center">
-            <div className="font-display text-[15px] font-extrabold text-text">
-              No bookings
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-[12px] font-semibold text-muted">
+                Service Name
+              </label>
+              <input
+                value={sName}
+                onChange={(e) => setSName(e.target.value)}
+                placeholder="Full Cage — Hourly"
+                className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+              />
             </div>
-            <div className="mt-1 text-[13px] text-muted">
-              Nothing matches this filter.
-            </div>
-          </div>
-        ) : (
-          filtered.map((b) => {
-            const isSel = selected.has(b.id);
-            const isCancelled = b.status === "cancelled";
-            return (
-              <button
-                key={b.id}
-                onClick={() => {
-                  if (selectMode) {
-                    if (!isCancelled) toggleSel(b.id);
-                  } else {
-                    setEditing({
-                      id: b.id,
-                      booking_number: b.booking_number,
-                      asset_id: b.asset_id,
-                      coach_id: b.coach_id,
-                      service_id: b.service_id,
-                      family_id: b.family_id,
-                      booking_type: b.booking_type,
-                      notes: b.notes,
-                      start_time: b.start_time,
-                      end_time: b.end_time,
-                      status: b.status,
-                      total_cents: b.total_cents,
-                      who: b.who,
-                    });
-                  }
-                }}
-                className={`flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-b-0 hover:bg-bg ${
-                  isSel ? "bg-accent/[.06]" : ""
-                }`}
-              >
-                {selectMode && (
-                  <span
-                    className={`flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-[5px] border text-[11px] font-extrabold ${
-                      isCancelled
-                        ? "border-line bg-bg text-line-2"
-                        : isSel
-                        ? "border-accent bg-accent text-white"
-                        : "border-line-2 bg-paper text-transparent"
-                    }`}
-                  >
-                    ✓
-                  </span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-display text-[15px] font-bold text-text">
-                    {b.who}
-                  </div>
-                  <div className="truncate text-[13px] text-muted">
-                    {b.service_name} · {b.space_name} · {b.coach_name}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-display text-[13px] font-bold text-text">
-                    {dayLabel(b.start_time)}
-                  </div>
-                  <div className="tnum text-[12px] text-muted">
-                    {clock(b.start_time)}
-                  </div>
-                </div>
-                <div
-                  className={`w-[78px] text-right font-display text-[11px] font-extrabold capitalize ${
-                    STATUS_STYLE[b.status] ?? "text-muted"
-                  }`}
+            <div className="flex gap-[10px]">
+              <div className="flex flex-1 flex-col gap-[6px]">
+                <label className="text-[12px] font-semibold text-muted">
+                  Category
+                </label>
+                <select
+                  value={sCat}
+                  onChange={(e) => setSCat(e.target.value)}
+                  className="rounded-[9px] border border-line-2 bg-paper px-[11px] py-[11px] text-[14px]"
                 >
-                  {b.status.replace(/_/g, " ")}
-                </div>
-              </button>
-            );
-          })
-        )}
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex w-[110px] flex-col gap-[6px]">
+                <label className="text-[12px] font-semibold text-muted">
+                  Rate ($/hr)
+                </label>
+                <input
+                  value={sRate}
+                  onChange={(e) => setSRate(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="75"
+                  className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+                />
+              </div>
+            </div>
+            <button
+              onClick={addService}
+              disabled={busy || !sName.trim() || !sRate.trim()}
+              className="rounded-[10px] bg-accent py-[13px] font-display text-[14px] font-extrabold text-white disabled:opacity-50"
+            >
+              {busy ? "Adding…" : "Add Service"}
+            </button>
+            <div className="text-[11.5px] leading-[1.4] text-muted">
+              To tie this service to a space type for the Space Value numbers,
+              set its space type in Settings after adding.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {services.length === 0 ? (
+        <div className="rounded-[16px] border border-dashed border-line-2 bg-paper p-10 text-center text-muted">
+          <b className="mb-[5px] block font-display text-[16px] text-text">
+            No Services Yet
+          </b>
+          Add a service above to get started.
+        </div>
+      ) : (
+        cats.map((cat) => (
+          <section key={cat} className="mb-6">
+            <div className="mb-[12px] font-display text-[19px] font-extrabold tracking-[-.01em] text-text">
+              {cat}
+            </div>
+            <div className="overflow-hidden rounded-[16px] border border-line bg-paper">
+              {grouped[cat].map((s) => (
+                <PriceRow
+                  key={s.id}
+                  service={s}
+                  open={editing === s.id}
+                  onToggle={() => setEditing(editing === s.id ? null : s.id)}
+                  onSaved={() => {
+                    setEditing(null);
+                    router.refresh();
+                  }}
+                  onError={setErr}
+                />
+              ))}
+            </div>
+          </section>
+        ))
+      )}
+
+      <div className="rounded-[14px] border border-dashed border-line-2 bg-paper p-4 text-[13px] text-muted">
+        Peak pricing windows (time-based premiums) are coming in a later update.
+        For now, set a flat peak rate per service below the base rate.
       </div>
 
-      {editing && (
-        <EditBookingModal
-          booking={editing}
-          assets={assets}
-          coaches={coaches}
-          services={services}
-          families={families}
-          bookingTypes={bookingTypes}
-          onClose={() => {
-            setEditing(null);
-            router.refresh();
-          }}
-        />
+      <style>{`
+        .sel{border:1px solid var(--line-2);background:var(--paper);color:var(--text);border-radius:8px;padding:9px 11px;outline:none;font-family:var(--fs);font-size:14px;height:40px;width:100%;}
+        .sel:focus{border-color:var(--accent);}
+      `}</style>
+    </div>
+  );
+}
+
+function PriceRow({
+  service,
+  open,
+  onToggle,
+  onSaved,
+  onError,
+}: {
+  service: Service;
+  open: boolean;
+  onToggle: () => void;
+  onSaved: () => void;
+  onError: (s: string | null) => void;
+}) {
+  const [name, setName] = useState(service.name);
+  const [cat, setCat] = useState(service.category);
+  const [base, setBase] = useState(String(service.base_rate_cents / 100));
+  const [peak, setPeak] = useState(
+    service.peak_rate_cents != null
+      ? String(service.peak_rate_cents / 100)
+      : ""
+  );
+  const [minHrs, setMinHrs] = useState(String(service.min_duration_hours));
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    const baseNum = parseFloat(base);
+    if (isNaN(baseNum) || baseNum < 0) return onError("Enter a valid base rate.");
+    const peakNum = peak.trim() === "" ? null : parseFloat(peak);
+    const minNum = parseFloat(minHrs);
+    setBusy(true);
+    onError(null);
+    const res = await updateServiceRates({
+      id: service.id,
+      name: name.trim() || service.name,
+      category: cat,
+      base_rate_cents: Math.round(baseNum * 100),
+      peak_rate_cents:
+        peakNum != null && !isNaN(peakNum) ? Math.round(peakNum * 100) : null,
+      min_duration_hours: isNaN(minNum) ? 1 : minNum,
+    });
+    setBusy(false);
+    if (res.error) return onError(res.error);
+    onSaved();
+  }
+
+  return (
+    <div className="border-b border-line last:border-b-0">
+      <div
+        onClick={onToggle}
+        className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-bg"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-display text-[15px] font-bold text-text">
+            {service.name}
+          </div>
+          <div className="truncate text-[12px] text-muted">
+            {service.min_duration_hours}hr min
+            {service.peak_rate_cents != null
+              ? ` · peak ${moneyExact(service.peak_rate_cents)}`
+              : ""}
+          </div>
+        </div>
+        <div className="tnum font-display text-[15px] font-extrabold text-text">
+          {moneyExact(service.base_rate_cents)}
+        </div>
+        <span
+          className={`text-[19px] text-line-2 transition-transform ${open ? "rotate-90" : ""}`}
+        >
+          ›
+        </span>
+      </div>
+
+      {open && (
+        <div className="bg-bg/40 px-4 pb-4 pt-1">
+          <div className="flex flex-col gap-3">
+            <div>
+              <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+                Name
+              </div>
+              <input value={name} onChange={(e) => setName(e.target.value)} className="sel" />
+            </div>
+            <div>
+              <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+                Category
+              </div>
+              <select value={cat} onChange={(e) => setCat(e.target.value)} className="sel">
+                {[...new Set([cat, ...CATEGORIES])].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+                  Base Rate ($)
+                </div>
+                <input value={base} onChange={(e) => setBase(e.target.value)} inputMode="decimal" className="sel" />
+              </div>
+              <div className="flex-1">
+                <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+                  Peak Rate ($)
+                </div>
+                <input value={peak} onChange={(e) => setPeak(e.target.value)} placeholder="optional" inputMode="decimal" className="sel" />
+              </div>
+              <div className="w-[90px]">
+                <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+                  Min Hrs
+                </div>
+                <input value={minHrs} onChange={(e) => setMinHrs(e.target.value)} inputMode="decimal" className="sel" />
+              </div>
+            </div>
+            <div className="flex gap-[9px]">
+              <button
+                onClick={save}
+                disabled={busy}
+                className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                onClick={onToggle}
+                disabled={busy}
+                className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-text"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
