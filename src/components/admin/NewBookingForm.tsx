@@ -895,7 +895,7 @@ export default function NewBookingForm({
 
           {(repeat === "weekly" || repeat === "biweekly") && (
             <div className="mt-3">
-              <p className="lab">On these days</p>
+              <p className="lab">On These Days</p>
               <div className="flex flex-wrap gap-[6px]">
                 {WEEKDAYS.map(([lbl, d]) => (
                   <button
