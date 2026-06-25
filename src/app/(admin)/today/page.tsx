@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import KpiCard from "@/components/admin/KpiCard";
 import AgendaRow, { type AgendaItem } from "@/components/admin/AgendaRow";
+import { getSpaceValue } from "@/lib/data/space-value-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +58,8 @@ function SectionHead({ eyebrow, count }: { eyebrow: string; count: string }) {
 export default async function TodayPage() {
   const supabase = await createClient();
   const { startIso, endIso } = dayBounds();
+
+  const spaceValue = await getSpaceValue("today");
 
   const { data, error } = await supabase
     .from("bookings")
@@ -113,6 +117,46 @@ export default async function TodayPage() {
           detail="Attention"
           bad
         />
+      </div>
+
+      <div className="mb-[10px] font-display text-[13px] font-extrabold uppercase tracking-[.04em] text-muted">
+        Space Value · Today
+      </div>
+      <div className="mb-[30px] grid grid-cols-2 gap-[14px] md:grid-cols-4">
+        <Link
+          href="/space-value"
+          className="rounded-[15px] border border-line bg-paper px-5 pb-[17px] pt-[19px] transition-colors hover:border-accent"
+        >
+          <div className="flex items-start justify-between">
+            <div className="font-display text-[11px] font-extrabold tracking-[.01em] text-accent">
+              UTILIZATION
+            </div>
+            <span className="font-display text-[16px] text-line-2">›</span>
+          </div>
+          <div className="tnum mt-[11px] font-display text-[31px] font-extrabold leading-none tracking-[-.025em] text-text">
+            {spaceValue.result.utilizationPct}%
+          </div>
+          <div className="mt-[10px] font-display text-[11.5px] font-bold text-muted">
+            of open hours booked
+          </div>
+        </Link>
+        <Link
+          href="/space-value"
+          className="rounded-[15px] border border-line bg-paper px-5 pb-[17px] pt-[19px] transition-colors hover:border-accent"
+        >
+          <div className="flex items-start justify-between">
+            <div className="font-display text-[11px] font-extrabold tracking-[.01em] text-accent">
+              OPEN GAPS
+            </div>
+            <span className="font-display text-[16px] text-line-2">›</span>
+          </div>
+          <div className="tnum mt-[11px] font-display text-[31px] font-extrabold leading-none tracking-[-.025em] text-gold">
+            {money(spaceValue.result.openGapsCents)}
+          </div>
+          <div className="mt-[10px] font-display text-[11.5px] font-bold text-muted">
+            money on the table
+          </div>
+        </Link>
       </div>
 
       {attention.length > 0 && (
