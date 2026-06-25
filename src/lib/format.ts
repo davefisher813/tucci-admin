@@ -34,3 +34,21 @@ export function ymd(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+// Format a phone number for display: "(203) 555-1234".
+// Falls back to the raw string if it isn't a recognizable US number.
+export function formatPhone(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  // 11-digit with leading country code 1
+  const d = digits.length === 11 && digits.startsWith("1")
+    ? digits.slice(1)
+    : digits;
+  if (d.length === 10) {
+    return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+  }
+  if (d.length === 7) {
+    return `${d.slice(0, 3)}-${d.slice(3)}`;
+  }
+  return raw; // not a standard US number, show as-is
+}
