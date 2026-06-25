@@ -29,6 +29,7 @@ export async function createBulkBookings(input: {
   booking_type: string;
   asset_ids: string[];
   coach_id: string | null;
+  coach_name?: string | null;
   family_id: string | null;
   service_id: string | null;
   athlete_ids: string[];
@@ -37,6 +38,7 @@ export async function createBulkBookings(input: {
   peak_premium_cents: number;
   total_cents: number;
   want_half: boolean;
+  notes?: string | null;
 }): Promise<BulkResult> {
   const supabase = await createClient();
 
@@ -91,6 +93,7 @@ export async function createBulkBookings(input: {
             status: "confirmed",
             asset_id,
             coach_id: input.coach_id,
+            coach_name: input.coach_name ?? null,
             family_id: input.family_id,
             service_id: input.service_id,
             start_time: occ.start_time,
@@ -101,6 +104,7 @@ export async function createBulkBookings(input: {
             half_slot: slot,
             source: "admin",
             recurrence_group_id: groupId,
+            notes: input.notes ?? null,
           })
           .select("id")
           .single();
