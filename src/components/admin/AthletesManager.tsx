@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createAthlete } from "@/lib/data/family-actions";
 
 export type AthleteRow = {
   id: string;
@@ -33,6 +35,33 @@ export default function AthletesManager({
 }) {
   const [term, setTerm] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  const router = useRouter();
+  const [showAdd, setShowAdd] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [aFam, setAFam] = useState("");
+  const [aFirst, setAFirst] = useState("");
+  const [aLast, setALast] = useState("");
+  const [aPos, setAPos] = useState("");
+
+  async function addAthlete() {
+    setBusy(true);
+    setErr(null);
+    const res = await createAthlete({
+      family_id: aFam,
+      first_name: aFirst.trim(),
+      last_name: aLast.trim(),
+      position: aPos.trim(),
+    });
+    setBusy(false);
+    if (res.error) return setErr(res.error);
+    setAFam("");
+    setAFirst("");
+    setALast("");
+    setAPos("");
+    setShowAdd(false);
+    router.refresh();
+  }
 
   const famName = new Map(families.map((f) => [f.id, f.family_name]));
   const t = term.trim().toLowerCase();
@@ -50,9 +79,92 @@ export default function AthletesManager({
 
   return (
     <div className="mx-auto max-w-[760px]">
-      <div className="mb-3 font-display text-[12px] font-bold text-muted">
-        {rows.length} {rows.length === 1 ? "Athlete" : "Athletes"}
+      {err && (
+        <div className="mb-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[13px] text-danger">
+          {err}
+        </div>
+      )}
+
+      <div className="mb-3 flex items-center justify-between">
+        <div className="font-display text-[12px] font-bold text-muted">
+          {rows.length} {rows.length === 1 ? "Athlete" : "Athletes"}
+        </div>
+        <button
+          onClick={() => setShowAdd((s) => !s)}
+          className="inline-flex h-9 items-center rounded-[9px] border border-ink bg-ink px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-white"
+        >
+          {showAdd ? "Close" : "Add Athlete"}
+        </button>
       </div>
+
+      {showAdd && (
+        <div className="mb-4 rounded-[16px] border border-line bg-paper p-4">
+          <div className="mb-[10px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+            New Athlete
+          </div>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-[12px] font-semibold text-muted">
+                Client / Family
+              </label>
+              <select
+                value={aFam}
+                onChange={(e) => setAFam(e.target.value)}
+                className="rounded-[9px] border border-line-2 bg-paper px-[11px] py-[11px] text-[14px]"
+              >
+                <option value="">Choose a Family…</option>
+                {families.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.family_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-[10px]">
+              <div className="flex flex-1 flex-col gap-[6px]">
+                <label className="text-[12px] font-semibold text-muted">
+                  First Name
+                </label>
+                <input
+                  value={aFirst}
+                  onChange={(e) => setAFirst(e.target.value)}
+                  placeholder="Jake"
+                  className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-[6px]">
+                <label className="text-[12px] font-semibold text-muted">
+                  Last Name
+                </label>
+                <input
+                  value={aLast}
+                  onChange={(e) => setALast(e.target.value)}
+                  placeholder="Martinez"
+                  className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-[12px] font-semibold text-muted">
+                Position
+              </label>
+              <input
+                value={aPos}
+                onChange={(e) => setAPos(e.target.value)}
+                placeholder="Pitcher"
+                className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+              />
+            </div>
+            <button
+              onClick={addAthlete}
+              disabled={busy || !aFam || !aFirst.trim() || !aLast.trim()}
+              className="rounded-[10px] bg-accent py-[13px] font-display text-[14px] font-extrabold text-white disabled:opacity-50"
+            >
+              {busy ? "Adding…" : "Add Athlete"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <input
         value={term}
@@ -69,7 +181,7 @@ export default function AthletesManager({
             </div>
             <div className="mt-1 text-[13px] text-muted">
               {athletes.length === 0
-                ? "Add athletes from the Clients screen, under each family."
+                ? "Add an athlete above and attach them to a family."
                 : "Try a different name."}
             </div>
           </div>
