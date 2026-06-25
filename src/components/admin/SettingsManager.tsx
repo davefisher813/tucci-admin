@@ -498,7 +498,7 @@ function AssetEditRow({
           Type
         </div>
         <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="sel w-full">
-          <option value="">No type</option>
+          <option value="">No Type</option>
           {assetTypes.map((t) => (
             <option key={t.id} value={t.id}>
               {t.label}
