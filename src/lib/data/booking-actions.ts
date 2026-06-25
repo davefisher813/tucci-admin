@@ -26,17 +26,24 @@ export async function updateBooking(input: {
   service_id: string | null;
   start_time: string;
   end_time: string;
+  family_id?: string | null;
+  booking_type?: string | null;
+  notes?: string | null;
 }): Promise<ActionResult> {
   const supabase = await createClient();
+  const patch: Record<string, unknown> = {
+    asset_id: input.asset_id,
+    coach_id: input.coach_id,
+    service_id: input.service_id,
+    start_time: input.start_time,
+    end_time: input.end_time,
+  };
+  if (input.family_id !== undefined) patch.family_id = input.family_id;
+  if (input.booking_type !== undefined) patch.booking_type = input.booking_type;
+  if (input.notes !== undefined) patch.notes = input.notes;
   const { error } = await supabase
     .from("bookings")
-    .update({
-      asset_id: input.asset_id,
-      coach_id: input.coach_id,
-      service_id: input.service_id,
-      start_time: input.start_time,
-      end_time: input.end_time,
-    })
+    .update(patch)
     .eq("id", input.id);
 
   if (error) return { error: mapDbError(error.message) };
