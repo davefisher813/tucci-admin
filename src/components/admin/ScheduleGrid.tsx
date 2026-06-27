@@ -7,7 +7,7 @@ import EditBookingModal, {
   type EditableBooking,
 } from "@/components/admin/EditBookingModal";
 import { checkInBooking, undoCheckIn } from "@/lib/data/checkin-actions";
-import { cancelBooking } from "@/lib/data/booking-actions";
+import { cancelBooking, updateBooking } from "@/lib/data/booking-actions";
 import type { Asset, Coach, Service, FamilyLite } from "@/lib/data/resources";
 import type { BookingType } from "@/lib/data/booking-type-actions";
 
@@ -88,6 +88,38 @@ function shiftDay(date: string, days: number): string {
   const d = new Date(date + "T00:00:00");
   d.setDate(d.getDate() + days);
   return ymd(d);
+}
+
+// Eastern wall-clock (date + hour + minute) -> UTC ISO. Corrects for EST/EDT
+// by probing the actual offset at that instant. Tested across DST boundaries.
+function easternToUtcISO(
+  date: string,
+  hour: number,
+  minute: number
+): string {
+  const [y, mo, d] = date.split("-").map(Number);
+  let guess = Date.UTC(y, mo - 1, d, hour, minute, 0);
+  for (let i = 0; i < 2; i++) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(guess));
+    const g = (t: string) =>
+      Number(parts.find((p) => p.type === t)?.value ?? 0);
+    let gh = g("hour");
+    if (gh === 24) gh = 0;
+    const actualWall = Date.UTC(g("year"), g("month") - 1, g("day"), gh, g("minute"), 0);
+    const wantWall = Date.UTC(y, mo - 1, d, hour, minute, 0);
+    const diff = wantWall - actualWall;
+    if (diff === 0) break;
+    guess += diff;
+  }
+  return new Date(guess).toISOString();
 }
 
 export default function ScheduleGrid({
@@ -184,6 +216,262 @@ export default function ScheduleGrid({
   const isOpen = (aid: string, h: number) =>
     !occupied.has(`${aid}@${h}`) && !halfMap.has(`${aid}@${h}`);
 
+  // ----- Drag to move a booking -----
+  // Tap opens edit; press-and-hold (~250ms) then drag moves the booking.
+  // Scroll locks during a drag; a ghost shows the snapped landing spot and
+  // whether it collides with another booking/block (red = invalid, snaps back).
+  const gridScrollRef = useRef<HTMLDivElement | null>(null);
+  const justDragged = useRef(false);
+  const [drag, setDrag] = useState<{
+    bookingId: string;
+    durMin: number;
+    ghostCol: number;
+    ghostTopPx: number;
+    invalid: boolean;
+    label: string;
+  } | null>(null);
+  const dragMeta = useRef<{
+    bookingId: string;
+    durMin: number;
+    grabOffsetY: number;
+    startClientX: number;
+    startClientY: number;
+    holdTimer: number | null;
+    active: boolean;
+  } | null>(null);
+
+  // Booking intervals per column for collision (minutes from START_HOUR).
+  function intervalsForCol(colIdx: number, excludeId: string) {
+    const out: { start: number; end: number }[] = [];
+    for (const it of overlayItems) {
+      if (it.booking.id === excludeId) continue;
+      if (colOf(it.assetId) !== colIdx) continue;
+      const s = etHM(it.booking.start_time);
+      const e = etHM(it.booking.end_time);
+      const sMin = (s.h - START_HOUR) * 60 + s.m;
+      const eMin = (e.h - START_HOUR) * 60 + e.m;
+      out.push({ start: sMin, end: eMin });
+    }
+    return out;
+  }
+
+  // Columns a booking would occupy if dropped on `colIdx` (itself + covered
+  // cages if it's a parent space).
+  function columnsFor(assetId: string, colIdx: number): number[] {
+    const cols = new Set<number>([colIdx]);
+    const children = coverage[assetId] ?? [];
+    for (const c of children) {
+      const ci = colOf(c);
+      if (ci >= 0) cols.add(ci);
+    }
+    return [...cols];
+  }
+
+  function collidesAt(
+    assetId: string,
+    colIdx: number,
+    topMin: number,
+    durMin: number,
+    excludeId: string
+  ): boolean {
+    const endMin = topMin + durMin;
+    for (const c of columnsFor(assetId, colIdx)) {
+      for (const iv of intervalsForCol(c, excludeId)) {
+        if (topMin < iv.end && endMin > iv.start) return true;
+      }
+    }
+    return false;
+  }
+
+  function pxToColTop(clientX: number, clientY: number, grabOffsetY: number) {
+    const scroller = gridScrollRef.current;
+    if (!scroller) return null;
+    const rect = scroller.getBoundingClientRect();
+    const xInGrid = clientX - rect.left + scroller.scrollLeft - GUTTER_W;
+    const yInGrid =
+      clientY - rect.top + scroller.scrollTop - HEADER_H - grabOffsetY;
+    const col = Math.floor(xInGrid / COL_W);
+    const rawMin = (yInGrid / ROW_H) * 60;
+    const snapMin = Math.round(rawMin / 15) * 15;
+    return { col, topMin: snapMin };
+  }
+
+  function beginHold(b: GridBooking, clientX: number, clientY: number, blockTop: number) {
+    const s = etHM(b.start_time);
+    const e = etHM(b.end_time);
+    const durMin = (e.h - START_HOUR) * 60 + e.m - ((s.h - START_HOUR) * 60 + s.m);
+    const grabOffsetY = clientY - blockTop;
+    dragMeta.current = {
+      bookingId: b.id,
+      durMin,
+      grabOffsetY,
+      startClientX: clientX,
+      startClientY: clientY,
+      holdTimer: window.setTimeout(() => {
+        if (!dragMeta.current) return;
+        dragMeta.current.active = true;
+        // lock scroll
+        if (gridScrollRef.current)
+          gridScrollRef.current.style.overflow = "hidden";
+        document.body.style.userSelect = "none";
+        // seed ghost at current spot
+        const pos = pxToColTop(clientX, clientY, grabOffsetY);
+        const col0 = colOf(b.asset_id);
+        const startMin0 = (s.h - START_HOUR) * 60 + s.m;
+        const useCol = pos?.col ?? col0;
+        const useTop = pos?.topMin ?? startMin0;
+        const bad = collidesAt(b.asset_id, useCol, useTop, durMin, b.id);
+        setDrag({
+          bookingId: b.id,
+          durMin,
+          ghostCol: useCol,
+          ghostTopPx: HEADER_H + (useTop / 60) * ROW_H,
+          invalid: bad || useCol < 0 || useCol >= assets.length,
+          label: minLabel(useTop),
+        });
+      }, 250),
+      active: false,
+    };
+  }
+
+  function minLabel(minFromStart: number): string {
+    const total = START_HOUR * 60 + minFromStart;
+    let h = Math.floor(total / 60);
+    const m = ((total % 60) + 60) % 60;
+    const ap = h >= 12 ? "p" : "a";
+    let hh = h % 12;
+    if (hh === 0) hh = 12;
+    return `${hh}:${String(m).padStart(2, "0")}${ap}`;
+  }
+
+  function moveHold(clientX: number, clientY: number) {
+    const meta = dragMeta.current;
+    if (!meta || !meta.active) return;
+    const b = bookings.find((x) => x.id === meta.bookingId);
+    if (!b) return;
+    const pos = pxToColTop(clientX, clientY, meta.grabOffsetY);
+    if (!pos) return;
+    const maxMin = (END_HOUR + 1 - START_HOUR) * 60;
+    const topMin = Math.max(0, Math.min(maxMin - meta.durMin, pos.topMin));
+    const col = pos.col;
+    const offGrid = col < 0 || col >= assets.length;
+    const bad =
+      offGrid ||
+      collidesAt(b.asset_id, col, topMin, meta.durMin, b.id);
+    setDrag({
+      bookingId: b.id,
+      durMin: meta.durMin,
+      ghostCol: offGrid ? Math.max(0, Math.min(assets.length - 1, col)) : col,
+      ghostTopPx: HEADER_H + (topMin / 60) * ROW_H,
+      invalid: bad,
+      label: bad ? "Can't drop here" : minLabel(topMin),
+    });
+  }
+
+  async function endHold(clientX: number, clientY: number) {
+    const meta = dragMeta.current;
+    if (meta?.holdTimer) clearTimeout(meta.holdTimer);
+    // restore scroll + selection
+    if (gridScrollRef.current) gridScrollRef.current.style.overflow = "";
+    document.body.style.userSelect = "";
+
+    if (!meta || !meta.active) {
+      dragMeta.current = null;
+      setDrag(null);
+      return;
+    }
+    justDragged.current = true;
+    setTimeout(() => {
+      justDragged.current = false;
+    }, 50);
+    const b = bookings.find((x) => x.id === meta.bookingId);
+    dragMeta.current = null;
+    if (!b) {
+      setDrag(null);
+      return;
+    }
+    const pos = pxToColTop(clientX, clientY, meta.grabOffsetY);
+    setDrag(null);
+    if (!pos) return;
+    const maxMin = (END_HOUR + 1 - START_HOUR) * 60;
+    const topMin = Math.max(0, Math.min(maxMin - meta.durMin, pos.topMin));
+    const col = pos.col;
+    if (col < 0 || col >= assets.length) return; // off grid, no-op
+    if (collidesAt(b.asset_id, col, topMin, meta.durMin, b.id)) return; // invalid
+    const targetAsset = assets[col];
+    if (!targetAsset) return;
+    // No change?
+    const s0 = etHM(b.start_time);
+    const startMin0 = (s0.h - START_HOUR) * 60 + s0.m;
+    if (targetAsset.id === b.asset_id && topMin === startMin0) return;
+
+    const newStartH = START_HOUR + Math.floor(topMin / 60);
+    const newStartM = topMin % 60;
+    const endMin = topMin + meta.durMin;
+    const newEndH = START_HOUR + Math.floor(endMin / 60);
+    const newEndM = endMin % 60;
+    const startISO = easternToUtcISO(date, newStartH, newStartM);
+    const endISO = easternToUtcISO(date, newEndH, newEndM);
+
+    const res = await updateBooking({
+      id: b.id,
+      asset_id: targetAsset.id,
+      coach_id: b.coach_id ?? null,
+      service_id: b.service_id ?? null,
+      start_time: startISO,
+      end_time: endISO,
+    });
+    if (!res.error) router.refresh();
+  }
+
+  // global listeners for the active drag
+  useEffect(() => {
+    function mm(e: MouseEvent) {
+      if (dragMeta.current?.active) {
+        e.preventDefault();
+        moveHold(e.clientX, e.clientY);
+      }
+    }
+    function mu(e: MouseEvent) {
+      if (dragMeta.current) endHold(e.clientX, e.clientY);
+    }
+    function tm(e: TouchEvent) {
+      if (dragMeta.current?.active) {
+        e.preventDefault();
+        const t = e.touches[0];
+        moveHold(t.clientX, t.clientY);
+      } else if (dragMeta.current && !dragMeta.current.active) {
+        // moved before hold fired => treat as scroll, cancel pending drag
+        const t = e.touches[0];
+        const dx = Math.abs(t.clientX - dragMeta.current.startClientX);
+        const dy = Math.abs(t.clientY - dragMeta.current.startClientY);
+        if (dx > 8 || dy > 8) {
+          if (dragMeta.current.holdTimer)
+            clearTimeout(dragMeta.current.holdTimer);
+          dragMeta.current = null;
+        }
+      }
+    }
+    function te(e: TouchEvent) {
+      if (dragMeta.current) {
+        const t = e.changedTouches[0];
+        endHold(t.clientX, t.clientY);
+      }
+    }
+    window.addEventListener("mousemove", mm);
+    window.addEventListener("mouseup", mu);
+    window.addEventListener("touchmove", tm, { passive: false });
+    window.addEventListener("touchend", te);
+    return () => {
+      window.removeEventListener("mousemove", mm);
+      window.removeEventListener("mouseup", mu);
+      window.removeEventListener("touchmove", tm);
+      window.removeEventListener("touchend", te);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookings, assets, date]);
+
+
   function rectSet(a: { c: number; r: number }, b: { c: number; r: number }) {
     const c0 = Math.min(a.c, b.c),
       c1 = Math.max(a.c, b.c),
@@ -275,7 +563,7 @@ export default function ScheduleGrid({
     <>
       {/* Desktop / tablet: full grid */}
       <div className="hidden overflow-hidden rounded-[16px] border border-line bg-paper md:block">
-        <div className="overflow-auto">
+        <div className="overflow-auto" ref={gridScrollRef}>
           <div className="relative min-w-max">
             {/* base grid: header, time labels, empty + half-slot cells */}
             <div
@@ -334,10 +622,42 @@ export default function ScheduleGrid({
                     top={HEADER_H + (startMin / 60) * ROW_H}
                     height={((endMin - startMin) / 60) * ROW_H}
                     color={colorOf(it.booking)}
-                    onEdit={(b) => setEditing(toEditable(b))}
+                    onEdit={(b) => {
+                      if (justDragged.current) return;
+                      setEditing(toEditable(b));
+                    }}
+                    onHoldStart={(clientX, clientY, blockTop) =>
+                      beginHold(it.booking, clientX, clientY, blockTop)
+                    }
+                    isDragging={drag?.bookingId === it.booking.id}
                   />
                 );
               })}
+
+              {/* drag ghost: snapped landing spot, red if invalid */}
+              {drag && (
+                <div
+                  className="pointer-events-none absolute z-20 rounded-[9px] border-2"
+                  style={{
+                    left: GUTTER_W + drag.ghostCol * COL_W + 4,
+                    top: drag.ghostTopPx + 3,
+                    width: COL_W - 8,
+                    height: (drag.durMin / 60) * ROW_H - 6,
+                    borderColor: drag.invalid ? "#DC2626" : "#1E78A6",
+                    background: drag.invalid
+                      ? "rgba(220,38,38,0.10)"
+                      : "rgba(30,120,166,0.10)",
+                    borderStyle: "dashed",
+                  }}
+                >
+                  <span
+                    className="absolute left-[6px] top-[3px] font-display text-[10px] font-extrabold"
+                    style={{ color: drag.invalid ? "#DC2626" : "#1E78A6" }}
+                  >
+                    {drag.label}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -484,6 +804,8 @@ function OverlayBlock({
   height,
   color,
   onEdit,
+  onHoldStart,
+  isDragging,
 }: {
   b: GridBooking;
   left: number;
@@ -491,6 +813,8 @@ function OverlayBlock({
   height: number;
   color: string | null;
   onEdit: (b: GridBooking) => void;
+  onHoldStart?: (clientX: number, clientY: number, blockTop: number) => void;
+  isDragging?: boolean;
 }) {
   const h = Math.max(height - 6, 16);
   const place: React.CSSProperties = {
@@ -499,14 +823,30 @@ function OverlayBlock({
     top: top + 3,
     width: COL_W - 8,
     height: h,
+    opacity: isDragging ? 0.4 : 1,
   };
   const showService = h >= 40; // ~>= 45 min
   const showTime = h >= 58; // ~>= 1 hr
+
+  // Tap = edit, press-hold-drag = move. We start a hold timer on press;
+  // a quick release fires the click (edit). The parent decides hold vs tap.
+  const holdProps = onHoldStart
+    ? {
+        onMouseDown: (e: React.MouseEvent) => {
+          onHoldStart(e.clientX, e.clientY, top + 3);
+        },
+        onTouchStart: (e: React.TouchEvent) => {
+          const t = e.touches[0];
+          onHoldStart(t.clientX, t.clientY, top + 3);
+        },
+      }
+    : {};
 
   if (color === null) {
     return (
       <button
         onClick={() => onEdit(b)}
+        {...holdProps}
         style={{ ...place, background: STRIPE, borderLeft: "4px solid #9CA3AF" }}
         className="pointer-events-auto flex flex-col justify-center overflow-hidden rounded-[9px] border border-line-2 px-[9px] py-[4px] text-left hover:shadow-md"
       >
@@ -523,6 +863,7 @@ function OverlayBlock({
   return (
     <button
       onClick={() => onEdit(b)}
+      {...holdProps}
       style={{
         ...place,
         background: lightTint(color),
