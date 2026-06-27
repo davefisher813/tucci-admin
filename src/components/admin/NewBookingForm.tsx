@@ -143,8 +143,7 @@ export default function NewBookingForm({
   const [coaches, setCoaches] = useState<Coach[]>(coachesInit);
   const [families, setFamilies] = useState<FamilyLite[]>(familiesInit);
   const [athletes, setAthletes] = useState<AthleteLite[]>(athletesInit);
-  const [bookingTypes, setBookingTypes] =
-    useState<BookingType[]>(bookingTypesInit);
+  const [bookingTypes, setBookingTypes] = useState<BookingType[]>(bookingTypesInit);
 
   const today = ymd(new Date());
   const initialDate = params.get("date") ?? today;
@@ -185,9 +184,7 @@ export default function NewBookingForm({
   const [athleteIds, setAthleteIds] = useState<string[]>([]);
 
   // Inline "+ New" panels
-  const [addPanel, setAddPanel] = useState
-    "" | "type" | "service" | "family" | "coach"
-  >("");
+  const [addPanel, setAddPanel] = useState<"" | "type" | "service" | "family" | "coach">("");
   const [addBusy, setAddBusy] = useState(false);
   const [addErr, setAddErr] = useState<string | null>(null);
   const [ntLabel, setNtLabel] = useState("");
@@ -353,9 +350,7 @@ export default function NewBookingForm({
 
   const [startDate, setStartDate] = useState(initialDate);
   const [endDate, setEndDate] = useState(initialDate);
-  const [repeat, setRepeat] = useState
-    "none" | "manual" | "daily" | "weekly" | "biweekly"
-  >("none");
+  const [repeat, setRepeat] = useState<"none" | "manual" | "daily" | "weekly" | "biweekly">("none");
   const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [manualDates, setManualDates] = useState<Set<string>>(new Set());
