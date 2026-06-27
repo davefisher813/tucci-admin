@@ -185,7 +185,7 @@ export default function NewBookingForm({
   const [athleteIds, setAthleteIds] = useState<string[]>([]);
 
   // Inline "+ New" panels
-  const [addPanel, setAddPanel] = useState<
+  const [addPanel, setAddPanel] = useState
     "" | "type" | "service" | "family" | "coach"
   >("");
   const [addBusy, setAddBusy] = useState(false);
@@ -353,7 +353,7 @@ export default function NewBookingForm({
 
   const [startDate, setStartDate] = useState(initialDate);
   const [endDate, setEndDate] = useState(initialDate);
-  const [repeat, setRepeat] = useState<
+  const [repeat, setRepeat] = useState
     "none" | "manual" | "daily" | "weekly" | "biweekly"
   >("none");
   const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
@@ -640,7 +640,7 @@ export default function NewBookingForm({
         <div className="mb-4 rounded-[12px] border border-success/40 bg-success/[.08] px-4 py-3">
           <div className="font-display text-[14px] font-extrabold text-text">
             {blockMode ? "Blocked" : "Created"} {result.created}{" "}
-            {blockMode ? "slot" : "booking"}
+            {blockMode ? "Slot" : "Booking"}
             {result.created === 1 ? "" : "s"}.
           </div>
           {result.skipped.length > 0 && (
@@ -1420,7 +1420,7 @@ export default function NewBookingForm({
       <div className="sticky bottom-0 z-10 mt-3 flex items-center gap-3 rounded-[14px] border border-line bg-paper px-4 py-3 shadow-lg">
         <div className="min-w-0 flex-1">
           <div className="font-display text-[15px] font-extrabold text-text">
-            {count} {blockMode ? "block" : "booking"}
+            {count} {blockMode ? "Block" : "Booking"}
             {count === 1 ? "" : "s"}
           </div>
           <div className="text-[12px] text-muted">
