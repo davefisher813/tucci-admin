@@ -190,7 +190,7 @@ export default function ClientsManager({
                       {f.family_name}
                     </div>
                     <div className="text-[12px] text-muted">
-                      {kids.length} {kids.length === 1 ? "athlete" : "athletes"}
+                      {kids.length} {kids.length === 1 ? "Athlete" : "Athletes"}
                       {f.primary_phone ? ` · ${formatPhone(f.primary_phone)}` : ""}
                     </div>
                   </div>
