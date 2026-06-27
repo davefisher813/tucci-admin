@@ -444,4 +444,244 @@ function TypeEditRow({
 }: {
   type: AssetType;
   busy: boolean;
-  onCancel:
+  onCancel: () => void;
+  onSave: (label: string) => void;
+}) {
+  const [label, setLabel] = useState(type.label);
+  return (
+    <div className="flex items-center gap-2 border-b border-line bg-bg/40 px-4 py-[10px] last:border-b-0">
+      <input
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        className="sel flex-1"
+      />
+      <button
+        onClick={() => label.trim() && onSave(label.trim())}
+        disabled={busy}
+        className="inline-flex h-9 items-center rounded-[9px] border border-ink bg-ink px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+      >
+        Save
+      </button>
+      <button
+        onClick={onCancel}
+        disabled={busy}
+        className="inline-flex h-9 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-text"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+function AssetEditRow({
+  asset,
+  assetTypes,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  asset: Asset;
+  assetTypes: AssetType[];
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (patch: {
+    name: string;
+    asset_type_id: string | null;
+    description: string | null;
+    features: string[];
+  }) => void;
+}) {
+  const [name, setName] = useState(asset.name);
+  const [typeId, setTypeId] = useState(asset.asset_type_id ?? "");
+  const [desc, setDesc] = useState(asset.description ?? "");
+  const [tags, setTags] = useState<string[]>(asset.features ?? []);
+  const [tagInput, setTagInput] = useState("");
+
+  function addTag() {
+    const t = tagInput.trim();
+    if (!t || tags.includes(t)) {
+      setTagInput("");
+      return;
+    }
+    setTags([...tags, t]);
+    setTagInput("");
+  }
+
+  return (
+    <div className="flex flex-col gap-3 border-b border-line bg-bg/40 px-4 py-4 last:border-b-0">
+      <div>
+        <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+          Name
+        </div>
+        <input value={name} onChange={(e) => setName(e.target.value)} className="sel w-full" />
+      </div>
+      <div>
+        <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+          Type
+        </div>
+        <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="sel w-full">
+          <option value="">No Type</option>
+          {assetTypes.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+          Description
+        </div>
+        <textarea
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          placeholder="Optional notes about this space"
+          className="ta"
+        />
+      </div>
+      <div>
+        <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+          Feature Tags
+        </div>
+        {tags.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {tags.map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 rounded-full bg-sky/[.16] px-3 py-1 font-display text-[11px] font-bold text-accent"
+              >
+                {t}
+                <button
+                  onClick={() => setTags(tags.filter((x) => x !== t))}
+                  className="text-[13px] leading-none text-accent/70 hover:text-danger"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addTag();
+              }
+            }}
+            placeholder="e.g. Trackman"
+            className="sel flex-1"
+          />
+          <button
+            onClick={addTag}
+            disabled={busy}
+            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-text hover:border-accent"
+          >
+            Add Tag
+          </button>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() =>
+            name.trim() &&
+            onSave({
+              name: name.trim(),
+              asset_type_id: typeId || null,
+              description: desc.trim() ? desc.trim() : null,
+              features: tags,
+            })
+          }
+          disabled={busy}
+          className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={busy}
+          className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-text"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ServiceEditRow({
+  service,
+  categories,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  service: Service;
+  categories: ServiceCategory[];
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (patch: {
+    name: string;
+    category: string;
+    category_id: string | null;
+    base_rate_cents: number;
+  }) => void;
+}) {
+  const [name, setName] = useState(service.name);
+  const [catId, setCatId] = useState<string>(
+    categories.find((c) => c.name === service.category)?.id ?? ""
+  );
+  const [price, setPrice] = useState(String(service.base_rate_cents / 100));
+
+  return (
+    <div className="flex flex-col gap-3 border-b border-line bg-bg/40 px-4 py-3 last:border-b-0">
+      <input value={name} onChange={(e) => setName(e.target.value)} className="sel" />
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <select value={catId} onChange={(e) => setCatId(e.target.value)} className="sel flex-1">
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <div className="flex items-center gap-2 sm:w-[150px]">
+          <span className="text-[14px] text-muted">$</span>
+          <input
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            inputMode="decimal"
+            className="sel flex-1"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              const d = parseFloat(price);
+              if (isNaN(d) || d < 0) return;
+              const chosen = categories.find((c) => c.id === catId);
+              onSave({
+                name: name.trim() || service.name,
+                category: chosen?.name ?? service.category,
+                category_id: chosen?.id ?? null,
+                base_rate_cents: Math.round(d * 100),
+              });
+            }}
+            disabled={busy}
+            className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[16px] font-display text-[11px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+          >
+            Save
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[16px] font-display text-[11px] font-extrabold tracking-[.03em] text-text"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
