@@ -144,6 +144,7 @@ export async function createService(input: {
   code: string;
   name: string;
   category: string;
+  category_id?: string | null;
   base_rate_cents: number;
   unit: string;
   min_duration_hours: number;
@@ -155,6 +156,7 @@ export async function createService(input: {
       code: input.code,
       name: input.name,
       category: input.category,
+      category_id: input.category_id ?? null,
       base_rate_cents: input.base_rate_cents,
       unit: input.unit,
       min_duration_hours: input.min_duration_hours,
@@ -172,16 +174,19 @@ export async function updateService(input: {
   id: string;
   name: string;
   category: string;
+  category_id?: string | null;
   base_rate_cents: number;
 }): Promise<ActionResult> {
   const supabase = await createClient();
+  const patch: Record<string, unknown> = {
+    name: input.name,
+    category: input.category,
+    base_rate_cents: input.base_rate_cents,
+  };
+  if (input.category_id !== undefined) patch.category_id = input.category_id;
   const { error } = await supabase
     .from("services")
-    .update({
-      name: input.name,
-      category: input.category,
-      base_rate_cents: input.base_rate_cents,
-    })
+    .update(patch)
     .eq("id", input.id);
   if (error) return { error: error.message };
   return { error: null };
