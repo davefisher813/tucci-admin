@@ -108,9 +108,70 @@ export default function ReportsView() {
               value={money(data.revenueCollectedCents)}
               accent
             />
+            <StatCard
+              label="Outstanding (A/R)"
+              value={money(data.outstandingCents)}
+            />
             <StatCard label="Booked Value" value={money(data.bookedValueCents)} />
-            <StatCard label="Bookings" value={String(data.bookingsCount)} />
             <StatCard label="No-Show Rate" value={`${noShowRate}%`} />
+          </div>
+
+          <div className="mb-5 rounded-[16px] border border-line bg-paper p-5">
+            <div className="mb-1 font-display text-[15px] font-extrabold text-text">
+              Where Revenue Comes From
+            </div>
+            <div className="mb-4 text-[12px] text-muted">
+              Booked value by service category
+            </div>
+            {data.bySource.length === 0 ? (
+              <Empty />
+            ) : (
+              <div className="flex flex-col gap-[14px]">
+                {(() => {
+                  const max = Math.max(
+                    1,
+                    ...data.bySource.map((s) => s.valueCents)
+                  );
+                  const totalSrc = data.bySource.reduce(
+                    (sum, s) => sum + s.valueCents,
+                    0
+                  );
+                  return data.bySource.map((s) => {
+                    const pct =
+                      totalSrc > 0
+                        ? Math.round((s.valueCents / totalSrc) * 100)
+                        : 0;
+                    const barPct = Math.round((s.valueCents / max) * 100);
+                    const color = s.colorHex ?? "#1E78A6";
+                    return (
+                      <div key={s.name}>
+                        <div className="mb-[5px] flex items-baseline justify-between text-[13px]">
+                          <span className="font-semibold text-text">
+                            {s.name}
+                          </span>
+                          <span className="font-display font-extrabold tabular-nums">
+                            {money(s.valueCents)}
+                          </span>
+                        </div>
+                        <div className="h-[8px] overflow-hidden rounded-full bg-bg">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.max(barPct, 2)}%`,
+                              background: color,
+                            }}
+                          />
+                        </div>
+                        <div className="mt-[3px] text-[11px] text-muted">
+                          {pct}% · {s.count}{" "}
+                          {s.count === 1 ? "Booking" : "Bookings"}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -121,7 +182,7 @@ export default function ReportsView() {
                 <Table
                   rows={data.byType.map((r) => ({
                     label: titleCase(r.type),
-                    sub: `${r.count} ${r.count === 1 ? "booking" : "bookings"}`,
+                    sub: `${r.count} ${r.count === 1 ? "Booking" : "Bookings"}`,
                     value: money(r.valueCents),
                   }))}
                 />
@@ -135,7 +196,7 @@ export default function ReportsView() {
                 <Table
                   rows={data.byMethod.map((r) => ({
                     label: titleCase(r.method),
-                    sub: `${r.count} ${r.count === 1 ? "payment" : "payments"}`,
+                    sub: `${r.count} ${r.count === 1 ? "Payment" : "Payments"}`,
                     value: money(r.amountCents),
                   }))}
                 />
