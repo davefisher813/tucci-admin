@@ -6,22 +6,23 @@ import { moneyExact } from "@/lib/format";
 import { updateServiceRates } from "@/lib/data/pricing-actions";
 import { createService } from "@/lib/data/settings-actions";
 import type { Service } from "@/lib/data/resources";
+import type { ServiceCategory } from "@/lib/data/category-actions";
 
-const CATEGORIES = [
-  "Cage Rentals",
-  "Lessons",
-  "Memberships",
-  "Field & Facility",
-];
-
-export default function PricingManager({ services }: { services: Service[] }) {
+export default function PricingManager({
+  services,
+  categories,
+}: {
+  services: Service[];
+  categories: ServiceCategory[];
+}) {
+  const activeCats = categories.filter((c) => c.is_active);
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sName, setSName] = useState("");
-  const [sCat, setSCat] = useState(CATEGORIES[0]);
+  const [sCatId, setSCatId] = useState(activeCats[0]?.id ?? "");
   const [sRate, setSRate] = useState("");
 
   async function addService() {
@@ -38,10 +39,12 @@ export default function PricingManager({ services }: { services: Service[] }) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "")
       .slice(0, 40);
+    const chosen = activeCats.find((c) => c.id === sCatId);
     const res = await createService({
       code,
       name: sName.trim(),
-      category: sCat,
+      category: chosen?.name ?? "",
+      category_id: chosen?.id ?? null,
       base_rate_cents: Math.round(dollars * 100),
       unit: "/hr",
       min_duration_hours: 1,
@@ -104,13 +107,13 @@ export default function PricingManager({ services }: { services: Service[] }) {
                   Category
                 </label>
                 <select
-                  value={sCat}
-                  onChange={(e) => setSCat(e.target.value)}
+                  value={sCatId}
+                  onChange={(e) => setSCatId(e.target.value)}
                   className="rounded-[9px] border border-line-2 bg-paper px-[11px] py-[11px] text-[14px]"
                 >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
+                  {activeCats.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
                     </option>
                   ))}
                 </select>
@@ -161,6 +164,7 @@ export default function PricingManager({ services }: { services: Service[] }) {
                 <PriceRow
                   key={s.id}
                   service={s}
+                  categories={activeCats}
                   open={editing === s.id}
                   onToggle={() => setEditing(editing === s.id ? null : s.id)}
                   onSaved={() => {
@@ -190,19 +194,23 @@ export default function PricingManager({ services }: { services: Service[] }) {
 
 function PriceRow({
   service,
+  categories,
   open,
   onToggle,
   onSaved,
   onError,
 }: {
   service: Service;
+  categories: ServiceCategory[];
   open: boolean;
   onToggle: () => void;
   onSaved: () => void;
   onError: (s: string | null) => void;
 }) {
   const [name, setName] = useState(service.name);
-  const [cat, setCat] = useState(service.category);
+  const [catId, setCatId] = useState<string>(
+    categories.find((c) => c.name === service.category)?.id ?? ""
+  );
   const [base, setBase] = useState(String(service.base_rate_cents / 100));
   const [peak, setPeak] = useState(
     service.peak_rate_cents != null
@@ -219,10 +227,12 @@ function PriceRow({
     const minNum = parseFloat(minHrs);
     setBusy(true);
     onError(null);
+    const chosenCat = categories.find((c) => c.id === catId);
     const res = await updateServiceRates({
       id: service.id,
       name: name.trim() || service.name,
-      category: cat,
+      category: chosenCat?.name ?? service.category,
+      category_id: chosenCat?.id ?? null,
       base_rate_cents: Math.round(baseNum * 100),
       peak_rate_cents:
         peakNum != null && !isNaN(peakNum) ? Math.round(peakNum * 100) : null,
@@ -273,10 +283,10 @@ function PriceRow({
               <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
                 Category
               </div>
-              <select value={cat} onChange={(e) => setCat(e.target.value)} className="sel">
-                {[...new Set([cat, ...CATEGORIES])].map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+              <select value={catId} onChange={(e) => setCatId(e.target.value)} className="sel">
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
                   </option>
                 ))}
               </select>
@@ -295,31 +305,4 @@ function PriceRow({
                 <input value={peak} onChange={(e) => setPeak(e.target.value)} placeholder="optional" inputMode="decimal" className="sel" />
               </div>
               <div className="w-[90px]">
-                <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
-                  Min Hrs
-                </div>
-                <input value={minHrs} onChange={(e) => setMinHrs(e.target.value)} inputMode="decimal" className="sel" />
-              </div>
-            </div>
-            <div className="flex gap-[9px]">
-              <button
-                onClick={save}
-                disabled={busy}
-                className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
-              >
-                Save
-              </button>
-              <button
-                onClick={onToggle}
-                disabled={busy}
-                className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-text"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-
