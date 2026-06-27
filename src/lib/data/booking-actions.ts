@@ -29,6 +29,8 @@ export async function updateBooking(input: {
   family_id?: string | null;
   booking_type?: string | null;
   notes?: string | null;
+  status?: string;
+  total_cents?: number;
 }): Promise<ActionResult> {
   const supabase = await createClient();
   const patch: Record<string, unknown> = {
@@ -41,6 +43,8 @@ export async function updateBooking(input: {
   if (input.family_id !== undefined) patch.family_id = input.family_id;
   if (input.booking_type !== undefined) patch.booking_type = input.booking_type;
   if (input.notes !== undefined) patch.notes = input.notes;
+  if (input.status !== undefined) patch.status = input.status;
+  if (input.total_cents !== undefined) patch.total_cents = input.total_cents;
   const { error } = await supabase
     .from("bookings")
     .update(patch)
