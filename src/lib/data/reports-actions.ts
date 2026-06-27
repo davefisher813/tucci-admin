@@ -11,6 +11,13 @@ export type ReportSummary = {
   cancelledCount: number;
   byType: { type: string; count: number; valueCents: number }[];
   byMethod: { method: string; count: number; amountCents: number }[];
+  bySource: {
+    name: string;
+    colorHex: string | null;
+    count: number;
+    valueCents: number;
+  }[];
+  outstandingCents: number;
 };
 
 function bounds(from: string, to: string) {
@@ -32,16 +39,29 @@ export async function getReportSummary(
 
   const { data: bookingRows } = await supabase
     .from("bookings")
-    .select("booking_type, status, total_cents, start_time")
+    .select(
+      "booking_type, status, total_cents, start_time, services ( category_id )"
+    )
     .gte("start_time", lower)
     .lt("start_time", upper);
 
   const bookings =
-    (bookingRows as {
+    (bookingRows as unknown as {
       booking_type: string;
       status: string;
       total_cents: number | null;
+      services: { category_id: string | null } | { category_id: string | null }[] | null;
     }[]) ?? [];
+
+  // Category lookup for names + colors (the real, editable table).
+  const { data: catRows } = await supabase
+    .from("service_categories")
+    .select("id, name, color_hex");
+  const catMap = new Map(
+    ((catRows as { id: string; name: string; color_hex: string | null }[]) ?? []).map(
+      (c) => [c.id, { name: c.name, color: c.color_hex }]
+    )
+  );
 
   const { data: paymentRows } = await supabase
     .from("payments")
@@ -62,6 +82,10 @@ export async function getReportSummary(
   let noShowCount = 0;
   let cancelledCount = 0;
   const typeMap = new Map<string, { count: number; valueCents: number }>();
+  const sourceMap = new Map
+    string,
+    { name: string; colorHex: string | null; count: number; valueCents: number }
+  >();
 
   for (const b of bookings) {
     if (b.status === "cancelled") {
@@ -76,6 +100,24 @@ export async function getReportSummary(
     t.count += 1;
     t.valueCents += v;
     typeMap.set(b.booking_type, t);
+
+    // revenue by source category (booking -> service -> category)
+    const svc = Array.isArray(b.services) ? b.services[0] : b.services;
+    const catId = svc?.category_id ?? null;
+    const meta = catId ? catMap.get(catId) : null;
+    const sourceKey = catId ?? "__uncategorized__";
+    const sName = meta?.name ?? "Uncategorized";
+    const sColor = meta?.color ?? null;
+    const sRow =
+      sourceMap.get(sourceKey) ?? {
+        name: sName,
+        colorHex: sColor,
+        count: 0,
+        valueCents: 0,
+      };
+    sRow.count += 1;
+    sRow.valueCents += v;
+    sourceMap.set(sourceKey, sRow);
   }
 
   let revenueCollectedCents = 0;
@@ -107,6 +149,16 @@ export async function getReportSummary(
     }))
     .sort((a, b) => b.amountCents - a.amountCents);
 
+  const bySource = Array.from(sourceMap.values()).sort(
+    (a, b) => b.valueCents - a.valueCents
+  );
+
+  // Outstanding (A/R): booked value not yet collected this period. Floored at 0.
+  const outstandingCents = Math.max(
+    0,
+    bookedValueCents - revenueCollectedCents
+  );
+
   return {
     revenueCollectedCents,
     refundsCents,
@@ -116,5 +168,7 @@ export async function getReportSummary(
     cancelledCount,
     byType,
     byMethod,
+    bySource,
+    outstandingCents,
   };
 }
