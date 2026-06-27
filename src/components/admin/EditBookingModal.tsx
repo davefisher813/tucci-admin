@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { moneyExact } from "@/lib/format";
 import { updateBooking, cancelBooking } from "@/lib/data/booking-actions";
 import {
   getSeriesInfo,
@@ -63,6 +62,10 @@ export default function EditBookingModal({
   const [notes, setNotes] = useState(booking.notes ?? "");
   const [start, setStart] = useState(toLocalInput(booking.start_time));
   const [end, setEnd] = useState(toLocalInput(booking.end_time));
+  const [status, setStatus] = useState(booking.status);
+  const [price, setPrice] = useState(
+    (booking.total_cents / 100).toFixed(2)
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -100,6 +103,8 @@ export default function EditBookingModal({
       notes: notes.trim() || null,
       start_time: startISO,
       end_time: endISO,
+      status,
+      total_cents: Math.round((parseFloat(price) || 0) * 100),
     });
     if (res.error) {
       setBusy(false);
@@ -332,6 +337,19 @@ export default function EditBookingModal({
               ))}
             </select>
           </Field>
+          <Field label="Status">
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="sel"
+            >
+              <option value="confirmed">Confirmed</option>
+              <option value="tentative">Tentative</option>
+              <option value="in_progress">Checked In</option>
+              <option value="no_show">No-Show</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Start">
               <input
@@ -366,12 +384,16 @@ export default function EditBookingModal({
               coach changes apply to all future bookings.
             </p>
           )}
-          <div className="flex items-center justify-between border-t border-line pt-3">
-            <span className="text-[12px] text-muted">Total</span>
-            <span className="tnum font-display text-[15px] font-extrabold text-text">
-              {moneyExact(booking.total_cents)}
-            </span>
-          </div>
+          <Field label="Price ($)">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="sel"
+              placeholder="0.00"
+            />
+          </Field>
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-[9px]">
