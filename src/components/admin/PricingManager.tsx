@@ -305,4 +305,31 @@ function PriceRow({
                 <input value={peak} onChange={(e) => setPeak(e.target.value)} placeholder="optional" inputMode="decimal" className="sel" />
               </div>
               <div className="w-[90px]">
-                <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-
+                <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+                  Min Hrs
+                </div>
+                <input value={minHrs} onChange={(e) => setMinHrs(e.target.value)} inputMode="decimal" className="sel" />
+              </div>
+            </div>
+            <div className="flex gap-[9px]">
+              <button
+                onClick={save}
+                disabled={busy}
+                className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                onClick={onToggle}
+                disabled={busy}
+                className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-text"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
