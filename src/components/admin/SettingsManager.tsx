@@ -16,8 +16,7 @@ import {
   deleteService,
 } from "@/lib/data/settings-actions";
 import type { Asset, AssetType, Service } from "@/lib/data/resources";
-
-const CATEGORIES = ["Cage Rentals", "Lessons", "Memberships", "Field & Facility"];
+import type { ServiceCategory } from "@/lib/data/category-actions";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -34,11 +33,14 @@ export default function SettingsManager({
   assets,
   assetTypes,
   services,
+  categories,
 }: {
   assets: Asset[];
   assetTypes: AssetType[];
   services: Service[];
+  categories: ServiceCategory[];
 }) {
+  const activeCats = categories.filter((c) => c.is_active);
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export default function SettingsManager({
   const [aType, setAType] = useState(assetTypes[0]?.id ?? "");
   const [newType, setNewType] = useState("");
   const [sName, setSName] = useState("");
-  const [sCat, setSCat] = useState("Cage Rentals");
+  const [sCatId, setSCatId] = useState(activeCats[0]?.id ?? "");
   const [sPrice, setSPrice] = useState("");
 
   async function run(fn: () => Promise<{ error: string | null }>) {
@@ -97,6 +99,21 @@ export default function SettingsManager({
           </span>
           <span className="mt-[2px] block text-[13px] text-muted">
             Operating hours and peak window for the Space Value numbers
+          </span>
+        </span>
+        <span className="shrink-0 text-muted">›</span>
+      </Link>
+
+      <Link
+        href="/settings/categories"
+        className="mb-6 flex items-center gap-3 rounded-[16px] border border-line bg-paper px-4 py-[15px] hover:border-accent"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-[16px] font-bold tracking-[-.01em] text-text">
+            Service Categories
+          </span>
+          <span className="mt-[2px] block text-[13px] text-muted">
+            Revenue source categories used across Pricing and Reports
           </span>
         </span>
         <span className="shrink-0 text-muted">›</span>
@@ -293,6 +310,7 @@ export default function SettingsManager({
                 <ServiceEditRow
                   key={s.id}
                   service={s}
+                  categories={activeCats}
                   busy={busy}
                   onCancel={() => setEditService(null)}
                   onSave={async (patch) => {
@@ -346,12 +364,14 @@ export default function SettingsManager({
             />
             <div className="flex flex-col gap-3 sm:flex-row">
               <select
-                value={sCat}
-                onChange={(e) => setSCat(e.target.value)}
+                value={sCatId}
+                onChange={(e) => setSCatId(e.target.value)}
                 className="sel flex-1"
               >
-                {CATEGORIES.map((c) => (
-                  <option key={c}>{c}</option>
+                {activeCats.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
               <div className="flex items-center gap-2 sm:w-[160px]">
@@ -379,11 +399,13 @@ export default function SettingsManager({
                       .replace(/^-|-$/g, "") +
                     "-" +
                     Date.now().toString().slice(-4);
+                  const chosen = activeCats.find((c) => c.id === sCatId);
                   const ok = await run(() =>
                     createService({
                       code,
                       name: sName.trim(),
-                      category: sCat,
+                      category: chosen?.name ?? "",
+                      category_id: chosen?.id ?? null,
                       base_rate_cents: Math.round(dollars * 100),
                       unit: "/hr",
                       min_duration_hours: 1,
@@ -422,231 +444,4 @@ function TypeEditRow({
 }: {
   type: AssetType;
   busy: boolean;
-  onCancel: () => void;
-  onSave: (label: string) => void;
-}) {
-  const [label, setLabel] = useState(type.label);
-  return (
-    <div className="flex items-center gap-2 border-b border-line bg-bg/40 px-4 py-[10px] last:border-b-0">
-      <input
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        className="sel flex-1"
-      />
-      <button
-        onClick={() => label.trim() && onSave(label.trim())}
-        disabled={busy}
-        className="inline-flex h-9 items-center rounded-[9px] border border-ink bg-ink px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
-      >
-        Save
-      </button>
-      <button
-        onClick={onCancel}
-        disabled={busy}
-        className="inline-flex h-9 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-text"
-      >
-        Cancel
-      </button>
-    </div>
-  );
-}
-
-function AssetEditRow({
-  asset,
-  assetTypes,
-  busy,
-  onCancel,
-  onSave,
-}: {
-  asset: Asset;
-  assetTypes: AssetType[];
-  busy: boolean;
-  onCancel: () => void;
-  onSave: (patch: {
-    name: string;
-    asset_type_id: string | null;
-    description: string | null;
-    features: string[];
-  }) => void;
-}) {
-  const [name, setName] = useState(asset.name);
-  const [typeId, setTypeId] = useState(asset.asset_type_id ?? "");
-  const [desc, setDesc] = useState(asset.description ?? "");
-  const [tags, setTags] = useState<string[]>(asset.features ?? []);
-  const [tagInput, setTagInput] = useState("");
-
-  function addTag() {
-    const t = tagInput.trim();
-    if (!t || tags.includes(t)) {
-      setTagInput("");
-      return;
-    }
-    setTags([...tags, t]);
-    setTagInput("");
-  }
-
-  return (
-    <div className="flex flex-col gap-3 border-b border-line bg-bg/40 px-4 py-4 last:border-b-0">
-      <div>
-        <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
-          Name
-        </div>
-        <input value={name} onChange={(e) => setName(e.target.value)} className="sel w-full" />
-      </div>
-      <div>
-        <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
-          Type
-        </div>
-        <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="sel w-full">
-          <option value="">No Type</option>
-          {assetTypes.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
-          Description
-        </div>
-        <textarea
-          value={desc}
-          onChange={(e) => setDesc(e.target.value)}
-          placeholder="Optional notes about this space"
-          className="ta"
-        />
-      </div>
-      <div>
-        <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
-          Feature Tags
-        </div>
-        {tags.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {tags.map((t) => (
-              <span
-                key={t}
-                className="inline-flex items-center gap-1 rounded-full bg-sky/[.16] px-3 py-1 font-display text-[11px] font-bold text-accent"
-              >
-                {t}
-                <button
-                  onClick={() => setTags(tags.filter((x) => x !== t))}
-                  className="text-[13px] leading-none text-accent/70 hover:text-danger"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="flex gap-2">
-          <input
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addTag();
-              }
-            }}
-            placeholder="e.g. Trackman"
-            className="sel flex-1"
-          />
-          <button
-            onClick={addTag}
-            disabled={busy}
-            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-text hover:border-accent"
-          >
-            Add Tag
-          </button>
-        </div>
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={() =>
-            name.trim() &&
-            onSave({
-              name: name.trim(),
-              asset_type_id: typeId || null,
-              description: desc.trim() ? desc.trim() : null,
-              features: tags,
-            })
-          }
-          disabled={busy}
-          className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
-        >
-          Save
-        </button>
-        <button
-          onClick={onCancel}
-          disabled={busy}
-          className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[18px] font-display text-[12px] font-extrabold tracking-[.03em] text-text"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ServiceEditRow({
-  service,
-  busy,
-  onCancel,
-  onSave,
-}: {
-  service: Service;
-  busy: boolean;
-  onCancel: () => void;
-  onSave: (patch: { name: string; category: string; base_rate_cents: number }) => void;
-}) {
-  const [name, setName] = useState(service.name);
-  const [cat, setCat] = useState(service.category);
-  const [price, setPrice] = useState(String(service.base_rate_cents / 100));
-
-  return (
-    <div className="flex flex-col gap-3 border-b border-line bg-bg/40 px-4 py-3 last:border-b-0">
-      <input value={name} onChange={(e) => setName(e.target.value)} className="sel" />
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <select value={cat} onChange={(e) => setCat(e.target.value)} className="sel flex-1">
-          {[...new Set([cat, ...CATEGORIES])].map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-        <div className="flex items-center gap-2 sm:w-[150px]">
-          <span className="text-[14px] text-muted">$</span>
-          <input
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            inputMode="decimal"
-            className="sel flex-1"
-          />
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              const d = parseFloat(price);
-              if (isNaN(d) || d < 0) return;
-              onSave({
-                name: name.trim() || service.name,
-                category: cat,
-                base_rate_cents: Math.round(d * 100),
-              });
-            }}
-            disabled={busy}
-            className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[16px] font-display text-[11px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
-          >
-            Save
-          </button>
-          <button
-            onClick={onCancel}
-            disabled={busy}
-            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[16px] font-display text-[11px] font-extrabold tracking-[.03em] text-text"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+  onCancel:
