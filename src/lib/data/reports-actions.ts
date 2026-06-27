@@ -82,10 +82,7 @@ export async function getReportSummary(
   let noShowCount = 0;
   let cancelledCount = 0;
   const typeMap = new Map<string, { count: number; valueCents: number }>();
-  const sourceMap = new Map
-    string,
-    { name: string; colorHex: string | null; count: number; valueCents: number }
-  >();
+  const sourceMap = new Map<string, { name: string; colorHex: string | null; count: number; valueCents: number }>();
 
   for (const b of bookings) {
     if (b.status === "cancelled") {
