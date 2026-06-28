@@ -5,7 +5,7 @@ import Sidebar from "@/components/admin/Sidebar";
 import Topbar from "@/components/admin/Topbar";
 import type { CurrentUser } from "@/lib/auth/guard";
 
-const STORAGE_KEY = "tucci.sidebar.collapsed";
+const STORAGE_KEY = "tucci_sidebar_collapsed";
 
 export default function AdminShell({
   user,
@@ -14,6 +14,7 @@ export default function AdminShell({
   user: CurrentUser;
   children: React.ReactNode;
 }) {
+  // Desktop collapse state, remembered across navigations.
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
@@ -48,8 +49,14 @@ export default function AdminShell({
         userRole={user.role}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar user={user} />
-        <main className="flex-1 px-4 py-6 md:px-8">{children}</main>
+        <Topbar
+          user={user}
+          sidebarCollapsed={collapsed}
+          onReopenSidebar={toggle}
+        />
+        <main className="flex-1 overflow-y-auto px-4 pb-[60px] pt-6 md:px-[26px]">
+          {children}
+        </main>
       </div>
     </div>
   );
