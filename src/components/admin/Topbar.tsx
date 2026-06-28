@@ -4,6 +4,14 @@ import { usePathname } from "next/navigation";
 import { signout } from "@/lib/auth/actions";
 import type { CurrentUser } from "@/lib/auth/guard";
 
+const ROLE_LABEL: Record<string, string> = {
+  owner: "Manager",
+  admin: "Admin",
+  coach: "Coach",
+  reception: "Reception",
+  family: "Family",
+};
+
 const TITLES: Record<string, string> = {
   today: "Today",
   schedule: "Schedule",
@@ -69,7 +77,7 @@ export default function Topbar({
           <div className="font-display text-[13px] font-extrabold text-text">
             {user.full_name}
           </div>
-          <div className="text-[11px] capitalize text-muted">{user.role}</div>
+          <div className="text-[11px] text-muted">{ROLE_LABEL[user.role] ?? user.role}</div>
         </div>
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky/[.14] font-display text-[12px] font-extrabold text-accent">
           {initials}
