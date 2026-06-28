@@ -27,6 +27,9 @@ const TITLES: Record<string, string> = {
   payroll: "Payroll",
   "promo-codes": "Promo Codes",
   reports: "Reports",
+  "space-value": "Space Value",
+  accounts: "Accounts",
+  waivers: "New Waiver",
   settings: "Settings",
 };
 
