@@ -45,11 +45,34 @@ const GROUPS: Group[] = [
   },
 ];
 
-function NavList({ onNavigate }: { onNavigate?: () => void }) {
+// Owners also see Accounts under System.
+function groupsForRole(role?: string): Group[] {
+  if (role !== "owner") return GROUPS;
+  return GROUPS.map((g) =>
+    g.title === "System"
+      ? {
+          ...g,
+          items: [
+            { label: "Accounts", href: "/accounts" },
+            ...g.items,
+          ],
+        }
+      : g
+  );
+}
+
+function NavList({
+  onNavigate,
+  userRole,
+}: {
+  onNavigate?: () => void;
+  userRole?: string;
+}) {
   const pathname = usePathname();
+  const groups = groupsForRole(userRole);
   return (
     <nav className="flex-1 overflow-y-auto px-[10px] py-[6px]">
-      {GROUPS.map((group) => (
+      {groups.map((group) => (
         <div key={group.title}>
           <div className="px-[10px] pb-[6px] pt-[14px] font-display text-[10px] font-extrabold tracking-[.02em] text-accent">
             {group.title}
@@ -82,10 +105,12 @@ export default function Sidebar({
   collapsed = false,
   onToggle,
   hydrated = true,
+  userRole,
 }: {
   collapsed?: boolean;
   onToggle?: () => void;
   hydrated?: boolean;
+  userRole?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -120,7 +145,7 @@ export default function Sidebar({
             </svg>
           </button>
         </div>
-        <NavList />
+        <NavList userRole={userRole} />
       </aside>
 
       {open && (
@@ -144,7 +169,7 @@ export default function Sidebar({
                 </svg>
               </button>
             </div>
-            <NavList onNavigate={() => setOpen(false)} />
+            <NavList onNavigate={() => setOpen(false)} userRole={userRole} />
           </div>
         </div>
       )}
