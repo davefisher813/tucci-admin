@@ -100,7 +100,7 @@ export default function WaiverIntakeForm() {
 
   if (done) {
     return (
-      <div className="mx-auto max-w-[560px]">
+      <div className="mx-auto max-w-[760px]">
         <div className="rounded-[16px] border border-success bg-paper p-6">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-success text-[20px] text-white">
             ✓
@@ -136,7 +136,7 @@ export default function WaiverIntakeForm() {
     : null;
 
   return (
-    <div className="mx-auto max-w-[560px] pb-[120px]">
+    <div className="mx-auto max-w-[760px] pb-[120px]">
       <h1 className="mb-[3px] font-display text-[21px] font-extrabold text-text">
         Add waiver
       </h1>
