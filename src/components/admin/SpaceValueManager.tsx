@@ -45,7 +45,7 @@ export default function SpaceValueManager({
   );
 
   return (
-    <div className="mx-auto max-w-[460px]">
+    <div className="mx-auto max-w-[760px]">
       <div className="mb-[14px] font-display text-[23px] font-extrabold tracking-[-.01em] text-text">
         Space Value
       </div>
