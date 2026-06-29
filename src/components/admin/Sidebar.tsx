@@ -45,7 +45,7 @@ const GROUPS: Group[] = [
   },
 ];
 
-// Owners also see Accounts under System.
+// Owners also see Accounts and Backup under System.
 function groupsForRole(role?: string): Group[] {
   if (role !== "owner") return GROUPS;
   return GROUPS.map((g) =>
@@ -54,6 +54,7 @@ function groupsForRole(role?: string): Group[] {
           ...g,
           items: [
             { label: "Accounts", href: "/accounts" },
+            { label: "Backup", href: "/backup" },
             ...g.items,
           ],
         }
