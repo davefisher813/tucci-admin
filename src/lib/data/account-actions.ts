@@ -212,7 +212,10 @@ export async function setAccountActive(input: {
 }
 
 // Permanently delete an account: removes the auth login AND the users row.
-// Owner-only. Cannot delete yourself. This is irreversible.
+// Owner-only. Cannot delete yourself. This is irreversible. If real records
+// reference the user (bookings, audit log, etc.), a hard delete of the users
+// row may be blocked by the database; in that case we still remove the login
+// and report clearly.
 export async function deleteAccount(userId: string): Promise<ActionResult> {
   const owner = await getOwnerOrNull();
   if (!owner) return { error: "Only managers can delete accounts." };
@@ -228,15 +231,39 @@ export async function deleteAccount(userId: string): Promise<ActionResult> {
     };
   }
 
-  // Remove the auth user first (the login). If a foreign key keeps the users
-  // row, delete it explicitly afterward.
-  const { error: authErr } = await admin.auth.admin.deleteUser(userId);
-  if (authErr && !/not found/i.test(authErr.message)) {
-    return { error: authErr.message };
+  // 1) Delete the public.users row first. Some schemas have auth.users -> users
+  //    cascade, which would re-block; deleting the app row up front avoids that.
+  const { error: rowErr } = await admin
+    .from("users")
+    .delete()
+    .eq("id", userId);
+
+  if (rowErr) {
+    // Most common: a foreign key (bookings_created_by, audit_log, etc.) still
+    // points at this user. Tell the manager plainly instead of failing silently.
+    const msg = rowErr.message || "";
+    if (/foreign key|violates|referenced/i.test(msg)) {
+      return {
+        error:
+          "This account has activity tied to it (bookings, logs, etc.), so it can't be fully deleted. Use Disable instead to remove their access while keeping the records.",
+      };
+    }
+    return { error: msg || "Could not delete the account record." };
   }
 
-  // Clean up the public.users row in case it wasn't cascade-deleted.
-  await admin.from("users").delete().eq("id", userId);
+  // 2) Remove the auth login. "not found" is fine (already gone).
+  const { error: authErr } = await admin.auth.admin.deleteUser(userId);
+  if (authErr) {
+    const msg =
+      typeof authErr.message === "string" ? authErr.message : String(authErr);
+    if (!/not found/i.test(msg)) {
+      return {
+        error:
+          "The account record was removed, but its login could not be deleted: " +
+          msg,
+      };
+    }
+  }
 
   return { error: null };
 }
