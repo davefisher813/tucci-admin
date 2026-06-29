@@ -129,7 +129,7 @@ export async function createAccount(input: {
   return { error: null };
 }
 
-// Resend the set-password invite to someone who hasn't signed in yet.
+// Resend the set-password invite. Works for any account.
 export async function resendInvite(email: string): Promise<ActionResult> {
   const owner = await getOwnerOrNull();
   if (!owner) return { error: "Only managers can resend invites." };
@@ -208,5 +208,35 @@ export async function setAccountActive(input: {
   } catch {
     // service key missing; the public.users flag still applies in app guards
   }
+  return { error: null };
+}
+
+// Permanently delete an account: removes the auth login AND the users row.
+// Owner-only. Cannot delete yourself. This is irreversible.
+export async function deleteAccount(userId: string): Promise<ActionResult> {
+  const owner = await getOwnerOrNull();
+  if (!owner) return { error: "Only managers can delete accounts." };
+  if (userId === owner.id) return { error: "You can't delete your own account." };
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return {
+      error:
+        "Deleting accounts needs the Supabase service role key set in Vercel.",
+    };
+  }
+
+  // Remove the auth user first (the login). If a foreign key keeps the users
+  // row, delete it explicitly afterward.
+  const { error: authErr } = await admin.auth.admin.deleteUser(userId);
+  if (authErr && !/not found/i.test(authErr.message)) {
+    return { error: authErr.message };
+  }
+
+  // Clean up the public.users row in case it wasn't cascade-deleted.
+  await admin.from("users").delete().eq("id", userId);
+
   return { error: null };
 }
