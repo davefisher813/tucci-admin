@@ -7,6 +7,7 @@ import {
   resendInvite,
   changeAccountRole,
   setAccountActive,
+  deleteAccount,
 } from "@/lib/data/account-actions";
 import { ASSIGNABLE_ROLES, type AccountRow } from "@/lib/data/account-types";
 import type { UserRole } from "@/lib/auth/guard";
@@ -49,6 +50,7 @@ export default function AccountsManager({
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -103,6 +105,18 @@ export default function AccountsManager({
     });
     setBusy(false);
     if (res.error) return setErr(res.error);
+    router.refresh();
+  }
+
+  async function remove(acct: AccountRow) {
+    setBusy(true);
+    setErr(null);
+    setNotice(null);
+    const res = await deleteAccount(acct.id);
+    setBusy(false);
+    if (res.error) return setErr(res.error);
+    setConfirmDelete(null);
+    setNotice(`${acct.full_name} was permanently deleted.`);
     router.refresh();
   }
 
@@ -296,22 +310,20 @@ export default function AccountsManager({
                     </div>
 
                     <div className="flex flex-wrap gap-[9px]">
-                      {a.invited_pending && (
-                        <button
-                          onClick={() => resend(a)}
-                          disabled={busy}
-                          className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] text-text hover:border-accent disabled:opacity-50"
-                        >
-                          Resend Invite
-                        </button>
-                      )}
+                      <button
+                        onClick={() => resend(a)}
+                        disabled={busy}
+                        className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] text-text hover:border-accent disabled:opacity-50"
+                      >
+                        Resend Invite
+                      </button>
                       {!isSelf && (
                         <button
                           onClick={() => toggleActive(a)}
                           disabled={busy}
                           className={`inline-flex h-10 items-center rounded-[9px] border px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] disabled:opacity-50 ${
                             a.is_active
-                              ? "border-line-2 bg-paper text-danger hover:border-danger"
+                              ? "border-line-2 bg-paper text-text hover:border-accent"
                               : "border-ink bg-ink text-white"
                           }`}
                         >
@@ -319,6 +331,40 @@ export default function AccountsManager({
                         </button>
                       )}
                     </div>
+
+                    {!isSelf && (
+                      <div className="mt-3 border-t border-line pt-3">
+                        {confirmDelete === a.id ? (
+                          <div className="flex flex-wrap items-center gap-[9px]">
+                            <span className="text-[12.5px] font-semibold text-danger">
+                              Delete {a.full_name} permanently?
+                            </span>
+                            <button
+                              onClick={() => remove(a)}
+                              disabled={busy}
+                              className="inline-flex h-9 items-center rounded-[9px] border border-danger bg-danger px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+                            >
+                              {busy ? "Deleting…" : "Yes, delete"}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              disabled={busy}
+                              className="inline-flex h-9 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[11px] font-extrabold tracking-[.03em] text-text"
+                            >
+                              Keep
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDelete(a.id)}
+                            disabled={busy}
+                            className="font-display text-[12px] font-bold text-muted hover:text-danger disabled:opacity-50"
+                          >
+                            Delete account permanently
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
