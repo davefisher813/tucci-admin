@@ -38,6 +38,10 @@ export async function createBulkBookings(input: {
   peak_premium_cents: number;
   total_cents: number;
   want_half: boolean;
+  // Explicit half choice per asset: 1 = top, 2 = bottom. When an asset id is
+  // present here, that exact slot is booked (no auto-pick). Falls back to
+  // want_half auto-pick for assets not listed.
+  half_slots?: Record<string, number>;
   notes?: string | null;
 }): Promise<BulkResult> {
   const supabase = await createClient();
@@ -80,8 +84,16 @@ export async function createBulkBookings(input: {
         continue;
       }
 
-      // Whole booking uses a null slot; a half tries slot 1 then slot 2.
-      const candidates: (number | null)[] = input.want_half ? [1, 2] : [null];
+      // Slot selection per asset:
+      //  - explicit half_slots[asset_id] (1 = top, 2 = bottom) books exactly that
+      //  - else want_half auto-picks slot 1 then 2
+      //  - else whole cage (null slot)
+      const explicit = input.half_slots?.[asset_id];
+      const candidates: (number | null)[] = explicit
+        ? [explicit]
+        : input.want_half
+        ? [1, 2]
+        : [null];
       let bookingId: string | null = null;
       let lastErr = "";
 
@@ -122,6 +134,8 @@ export async function createBulkBookings(input: {
         const reason = isConflict(lastErr)
           ? isCoachConflict(lastErr)
             ? "coach busy"
+            : explicit
+            ? (explicit === 1 ? "top half booked" : "bottom half booked")
             : input.want_half
             ? "both halves booked"
             : "space booked"
