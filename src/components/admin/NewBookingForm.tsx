@@ -365,6 +365,12 @@ export default function NewBookingForm({
     initialDur ? Number(initialDur) : 1
   );
   const [wantHalf, setWantHalf] = useState(initialHalf);
+  // Half-cage selection: which cages are split, and which halves are picked.
+  // slot 1 = top, slot 2 = bottom.
+  const [splitIds, setSplitIds] = useState<Set<string>>(new Set());
+  const [selectedHalves, setSelectedHalves] = useState<Map<string, Set<number>>>(
+    new Map()
+  );
   const [blockMode, setBlockMode] = useState(params.get("block") === "1");
   const [blockLabel, setBlockLabel] = useState("");
   const [blockNotes, setBlockNotes] = useState("");
@@ -474,6 +480,26 @@ export default function NewBookingForm({
     return out;
   }, [dayBookings, coverage, startDate, sh, sm, durationHours, assets, repeat]);
 
+  // Per-cage booked halves (slot 1 top / slot 2 bottom) in the chosen window,
+  // so the map can grey just the taken half and leave the other clickable.
+  const bookedHalves = useMemo(() => {
+    if (repeat !== "none") return new Map<string, Set<number>>();
+    const winStart = new Date(`${startDate}T00:00:00`);
+    winStart.setHours(sh, sm, 0, 0);
+    const winEnd = new Date(winStart.getTime() + durationHours * 3600 * 1000);
+    const map = new Map<string, Set<number>>();
+    for (const b of dayBookings) {
+      const bs = new Date(b.start_time).getTime();
+      const be = new Date(b.end_time).getTime();
+      if (!(bs < winEnd.getTime() && be > winStart.getTime())) continue;
+      if (b.half_slot == null) continue;
+      const set = map.get(b.asset_id) ?? new Set<number>();
+      set.add(b.half_slot);
+      map.set(b.asset_id, set);
+    }
+    return map;
+  }, [dayBookings, startDate, sh, sm, durationHours, repeat]);
+
   // What the map highlights: the selected assets, plus the child cages of any
   // selected parent (Field 1, Field 2, Full Turf, Full Facility), so picking a
   // field lights up every cage it covers.
@@ -497,8 +523,84 @@ export default function NewBookingForm({
   }, [startDate, endDate, repeat, weekdays, manualDates]);
   const includedDates =
     repeat === "manual" ? generated : generated.filter((d) => !excluded.has(d));
-  const count = assetIds.size * includedDates.length;
+  // Count selectable units: each whole cage is 1, each picked half is 1.
+  const halfUnitCount = [...selectedHalves.values()].reduce(
+    (sum, set) => sum + set.size,
+    0
+  );
+  const unitsPerDate = assetIds.size + halfUnitCount;
+  const count = unitsPerDate * includedDates.length;
   const grandTotal = count * totalPerBooking;
+
+  // Human summary of the current space selection (whole + halves).
+  const selectionSummary = (() => {
+    const parts: string[] = [];
+    for (const id of assetIds) parts.push(assetName.get(id) ?? "Space");
+    for (const [id, set] of selectedHalves) {
+      const name = assetName.get(id) ?? "Cage";
+      if (set.has(1) && set.has(2)) parts.push(`${name} (full)`);
+      else if (set.has(1)) parts.push(`${name} · Top`);
+      else if (set.has(2)) parts.push(`${name} · Bottom`);
+    }
+    return parts.length ? parts.join(", ") : "No spaces selected.";
+  })();
+
+  // Whole-cage toggle from the map. Selecting whole clears any half/ split state.
+  function toggleWholeAsset(id: string) {
+    setResult(null);
+    setSplitIds((p) => {
+      const n = new Set(p);
+      n.delete(id);
+      return n;
+    });
+    setSelectedHalves((p) => {
+      const n = new Map(p);
+      n.delete(id);
+      return n;
+    });
+    toggleAsset(id);
+  }
+
+  // Flip a cage between whole and split. Entering split drops the whole
+  // selection; leaving split drops any half picks for that cage.
+  function toggleSplitAsset(id: string) {
+    setResult(null);
+    setSplitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        setSelectedHalves((p) => {
+          const n = new Map(p);
+          n.delete(id);
+          return n;
+        });
+      } else {
+        next.add(id);
+        // remove the whole-cage selection if present
+        setAssetIds((p) => {
+          if (!p.has(id)) return p;
+          const n = new Set(p);
+          n.delete(id);
+          return n;
+        });
+      }
+      return next;
+    });
+  }
+
+  // Select/deselect a half (slot 1 top, slot 2 bottom).
+  function toggleHalfAsset(id: string, slot: number) {
+    setResult(null);
+    setSelectedHalves((prev) => {
+      const next = new Map(prev);
+      const set = new Set(next.get(id) ?? []);
+      if (set.has(slot)) set.delete(slot);
+      else set.add(slot);
+      if (set.size === 0) next.delete(id);
+      else next.set(id, set);
+      return next;
+    });
+  }
 
   function toggleAsset(id: string) {
     setResult(null);
@@ -575,7 +677,25 @@ export default function NewBookingForm({
   async function submit() {
     setErr(null);
     setResult(null);
-    if (assetIds.size === 0) return setErr("Pick at least one space.");
+
+    // Assemble the spaces to book: whole cages, plus cages with a single half
+    // picked (explicit slot). A cage with BOTH halves picked is booked as the
+    // whole cage (same outcome, one booking).
+    const wholeList: string[] = [...assetIds];
+    const halfSlots: Record<string, number> = {};
+    for (const [id, set] of selectedHalves) {
+      if (set.has(1) && set.has(2)) {
+        if (!wholeList.includes(id)) wholeList.push(id);
+      } else if (set.has(1)) {
+        if (!wholeList.includes(id)) wholeList.push(id);
+        halfSlots[id] = 1;
+      } else if (set.has(2)) {
+        if (!wholeList.includes(id)) wholeList.push(id);
+        halfSlots[id] = 2;
+      }
+    }
+
+    if (wholeList.length === 0) return setErr("Pick at least one space.");
     if (!blockMode && !serviceId) return setErr("Pick a service.");
     if (includedDates.length === 0) return setErr("No dates selected.");
     if (!blockMode && durationHours < minDuration)
@@ -591,7 +711,7 @@ export default function NewBookingForm({
     setBusy(true);
     const res = await createBulkBookings({
       booking_type: blockMode ? "blocked" : bookingType,
-      asset_ids: [...assetIds],
+      asset_ids: wholeList,
       coach_id:
         blockMode || coachId.startsWith("name:") ? null : coachId || null,
       coach_name:
@@ -605,7 +725,8 @@ export default function NewBookingForm({
       base_rate_cents: blockMode ? 0 : baseCents,
       peak_premium_cents: 0,
       total_cents: blockMode ? 0 : totalPerBooking,
-      want_half: onlySplittable && wantHalf,
+      want_half: false,
+      half_slots: blockMode ? undefined : halfSlots,
       notes: blockMode
         ? [blockLabel.trim(), blockNotes.trim()].filter(Boolean).join(" — ") ||
           null
@@ -727,35 +848,16 @@ export default function NewBookingForm({
           <FacilityMap
             assets={assets}
             selectedIds={mapSelected}
+            splitIds={splitIds}
+            selectedHalves={selectedHalves}
+            bookedHalves={bookedHalves}
             unavailable={unavailable}
-            onToggle={toggleAsset}
+            onToggleWhole={toggleWholeAsset}
+            onToggleSplit={toggleSplitAsset}
+            onToggleHalf={toggleHalfAsset}
           />
 
-          {onlySplittable && (
-            <div className="nbk-size-toggle mt-3" role="group" aria-label="Lane size">
-              <button
-                type="button"
-                onClick={() => setWantHalf(false)}
-                className={`nbk-size-btn${!wantHalf ? " on" : ""}`}
-              >
-                Full Lane
-              </button>
-              <button
-                type="button"
-                onClick={() => setWantHalf(true)}
-                className={`nbk-size-btn${wantHalf ? " on" : ""}`}
-              >
-                Half Lane
-              </button>
-            </div>
-          )}
-          <p className="hint">
-            {assetIds.size === 0
-              ? "No spaces selected."
-              : `${[...assetIds].map((id) => assetName.get(id)).join(", ")}${
-                  onlySplittable && wantHalf ? "  (half lane)" : ""
-                }`}
-          </p>
+          <p className="hint">{selectionSummary}</p>
         </div>
 
         {/* WHEN */}
