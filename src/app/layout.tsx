@@ -10,10 +10,6 @@ export const metadata: Metadata = {
     title: "Tucci Admin",
     statusBarStyle: "default",
   },
-  icons: {
-    icon: "/icon.png",
-    apple: "/apple-touch-icon.png",
-  },
 };
 
 export default function RootLayout({
