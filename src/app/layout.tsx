@@ -4,6 +4,16 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Tucci Elite Admin",
   description: "Operations admin for Tucci Elite Baseball and Softball.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "Tucci Admin",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
