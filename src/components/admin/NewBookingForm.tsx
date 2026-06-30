@@ -820,30 +820,28 @@ export default function NewBookingForm({
         {/* WHERE */}
         <div>
           <SecHead>Where</SecHead>
-          <p className="lab">Spaces (tap one or several)</p>
-          <div className="mb-3 flex flex-wrap gap-2">
+          <p className="lab">Tap the map below, or pick a space here</p>
+          <select
+            value=""
+            onChange={(e) => {
+              const id = e.target.value;
+              if (id) toggleAsset(id);
+            }}
+            className="sel mb-3"
+          >
+            <option value="">Add a space…</option>
             {assets.map((a) => {
               const on = assetIds.has(a.id);
               const blocked = unavailable.has(a.id);
               return (
-                <button
-                  key={a.id}
-                  type="button"
-                  disabled={blocked}
-                  onClick={() => toggleAsset(a.id)}
-                  className={`rounded-full border px-3 py-[7px] font-display text-[12px] font-extrabold tracking-[.02em] ${
-                    blocked
-                      ? "border-line bg-bg text-muted line-through opacity-60"
-                      : on
-                      ? "border-[#B07F00] bg-gold text-ink"
-                      : "border-line-2 bg-paper text-muted hover:border-accent"
-                  }`}
-                >
+                <option key={a.id} value={a.id} disabled={blocked}>
                   {a.name}
-                </button>
+                  {on ? "  ✓" : ""}
+                  {blocked ? "  (booked)" : ""}
+                </option>
               );
             })}
-          </div>
+          </select>
 
           <FacilityMap
             assets={assets}
