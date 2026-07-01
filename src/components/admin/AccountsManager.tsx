@@ -58,6 +58,7 @@ export default function AccountsManager({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<UserRole>("admin");
+  const [newPw, setNewPw] = useState("");
 
   async function add() {
     setBusy(true);
@@ -67,13 +68,19 @@ export default function AccountsManager({
       full_name: name.trim(),
       email: email.trim(),
       role,
+      password: newPw.trim() ? newPw.trim() : undefined,
     });
     setBusy(false);
     if (res.error) return setErr(res.error);
-    setNotice(`Invite sent to ${email.trim()}. They'll set their own password.`);
+    setNotice(
+      newPw.trim()
+        ? `Account created for ${name.trim()}. Give them the password you set; they can sign in now.`
+        : `Invite sent to ${email.trim()}. They'll set their own password.`
+    );
     setName("");
     setEmail("");
     setRole("admin");
+    setNewPw("");
     setShowAdd(false);
     router.refresh();
   }
@@ -219,12 +226,28 @@ export default function AccountsManager({
                 {ASSIGNABLE_ROLES.find((r) => r.value === role)?.blurb}
               </div>
             </div>
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-[12px] font-semibold text-muted">
+                Password (optional)
+              </label>
+              <input
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                type="text"
+                placeholder="Set a password now, or leave blank to email an invite"
+                className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
+              />
+              <div className="text-[11.5px] leading-[1.4] text-muted">
+                If you set a password here, they can sign in immediately with it,
+                no email needed. Leave blank to send an invite instead.
+              </div>
+            </div>
             <button
               onClick={add}
               disabled={busy || !name.trim() || !email.trim()}
               className="rounded-[10px] bg-accent py-[13px] font-display text-[14px] font-extrabold text-white disabled:opacity-50"
             >
-              {busy ? "Sending Invite…" : "Create & Send Invite"}
+              {busy ? "Creating…" : newPw.trim() ? "Create Account" : "Create & Send Invite"}
             </button>
             <div className="text-[11.5px] leading-[1.4] text-muted">
               They get an email with a link to set their own password. No
