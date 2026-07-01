@@ -89,6 +89,7 @@ export async function createAccount(input: {
     };
   }
 
+  // Try a normal invite first.
   const { data: invited, error: invErr } = await admin.auth.admin.inviteUserByEmail(
     email,
     {
@@ -97,15 +98,55 @@ export async function createAccount(input: {
     }
   );
 
-  if (invErr || !invited?.user) {
-    const msg = invErr?.message ?? "Could not create the account.";
-    if (/already.*registered|exists/i.test(msg))
-      return { error: "That email already has an account." };
-    return { error: msg };
+  let uid = invited?.user?.id ?? null;
+
+  // If the email already exists, don't error. Find that user, make sure they're
+  // active and unbanned, and send a fresh set-password (recovery) link so they
+  // can get in. This turns "Add Account" into repair-and-reinvite.
+  if (invErr || !uid) {
+    const msg = invErr?.message ?? "";
+    const alreadyExists = /already.*registered|exists|been registered/i.test(msg);
+    if (!alreadyExists) {
+      return { error: msg || "Could not create the account." };
+    }
+
+    // Locate the existing auth user by email.
+    let foundId: string | null = null;
+    for (let page = 1; page <= 5 && !foundId; page++) {
+      const { data: list } = await admin.auth.admin.listUsers({
+        page,
+        perPage: 200,
+      });
+      const match = (list?.users ?? []).find(
+        (u) => (u.email ?? "").toLowerCase() === email
+      );
+      if (match) foundId = match.id;
+      if ((list?.users ?? []).length < 200) break;
+    }
+
+    if (!foundId) {
+      return {
+        error:
+          "That email already exists but the account could not be located. Delete it in Supabase, then add again.",
+      };
+    }
+    uid = foundId;
+
+    // Clear any ban and refresh their metadata.
+    await admin.auth.admin.updateUserById(uid, {
+      ban_duration: "none",
+      user_metadata: { full_name: name },
+    });
+
+    // Send a real recovery email (this actually delivers, and works for an
+    // existing user). It lands on /set-password via our redirect.
+    const pub = await createClient();
+    await pub.auth.resetPasswordForEmail(email, {
+      redirectTo: `${siteUrl()}/set-password`,
+    });
   }
 
-  const uid = invited.user.id;
-
+  // Upsert the app users row (create or repair).
   const { error: uErr } = await admin
     .from("users")
     .upsert(
@@ -141,11 +182,25 @@ export async function resendInvite(email: string): Promise<ActionResult> {
     return { error: "Needs the Supabase service role key set in Vercel." };
   }
 
-  const { error } = await admin.auth.admin.inviteUserByEmail(
-    email.trim().toLowerCase(),
-    { redirectTo: `${siteUrl()}/set-password` }
-  );
-  if (error) return { error: error.message };
+  const target = email.trim().toLowerCase();
+  // Try invite first (works for brand-new / never-confirmed users).
+  const { error: invErr } = await admin.auth.admin.inviteUserByEmail(target, {
+    redirectTo: `${siteUrl()}/set-password`,
+  });
+
+  // If they already exist, send a recovery email instead (that one delivers
+  // and lets them set a new password).
+  if (invErr) {
+    const exists = /already.*registered|exists|been registered/i.test(
+      invErr.message
+    );
+    if (!exists) return { error: invErr.message };
+    const pub = await createClient();
+    const { error: recErr } = await pub.auth.resetPasswordForEmail(target, {
+      redirectTo: `${siteUrl()}/set-password`,
+    });
+    if (recErr) return { error: recErr.message };
+  }
   return { error: null };
 }
 
@@ -265,5 +320,34 @@ export async function deleteAccount(userId: string): Promise<ActionResult> {
     }
   }
 
+  return { error: null };
+}
+
+// Set a user's password directly, no email involved. Owner-only. This is the
+// escape hatch when email flows fail: type a password here, tell the person.
+export async function setPasswordDirect(input: {
+  user_id: string;
+  password: string;
+}): Promise<ActionResult> {
+  const owner = await getOwnerOrNull();
+  if (!owner) return { error: "Only managers can set passwords." };
+  if (input.password.length < 8)
+    return { error: "Password must be at least 8 characters." };
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return {
+      error:
+        "Setting a password needs the Supabase service role key set in Vercel.",
+    };
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(input.user_id, {
+    password: input.password,
+    ban_duration: "none",
+  });
+  if (error) return { error: error.message };
   return { error: null };
 }
