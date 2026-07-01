@@ -8,6 +8,7 @@ import {
   changeAccountRole,
   setAccountActive,
   deleteAccount,
+  setPasswordDirect,
 } from "@/lib/data/account-actions";
 import { ASSIGNABLE_ROLES, type AccountRow } from "@/lib/data/account-types";
 import type { UserRole } from "@/lib/auth/guard";
@@ -51,6 +52,8 @@ export default function AccountsManager({
   const [notice, setNotice] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [pwFor, setPwFor] = useState<string | null>(null);
+  const [pwValue, setPwValue] = useState("");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -106,6 +109,21 @@ export default function AccountsManager({
     setBusy(false);
     if (res.error) return setErr(res.error);
     router.refresh();
+  }
+
+  async function savePassword(acct: AccountRow) {
+    setBusy(true);
+    setErr(null);
+    setNotice(null);
+    const res = await setPasswordDirect({ user_id: acct.id, password: pwValue });
+    setBusy(false);
+    if (res.error)
+      return setErr(
+        typeof res.error === "string" ? res.error : "Could not set password."
+      );
+    setPwFor(null);
+    setPwValue("");
+    setNotice(`Password set for ${acct.full_name}. Share it with them.`);
   }
 
   async function remove(acct: AccountRow) {
@@ -330,7 +348,54 @@ export default function AccountsManager({
                           {a.is_active ? "Disable Account" : "Re-enable Account"}
                         </button>
                       )}
+                      <button
+                        onClick={() => {
+                          setPwFor(pwFor === a.id ? null : a.id);
+                          setPwValue("");
+                        }}
+                        disabled={busy}
+                        className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] text-text hover:border-accent disabled:opacity-50"
+                      >
+                        Set Password
+                      </button>
                     </div>
+
+                    {pwFor === a.id && (
+                      <div className="mt-3 rounded-[10px] border border-line-2 bg-bg/50 p-3">
+                        <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+                          Set a Password for {a.full_name}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="text"
+                            value={pwValue}
+                            onChange={(e) => setPwValue(e.target.value)}
+                            placeholder="Type a password (8+ characters)"
+                            className="min-w-[220px] flex-1 rounded-[8px] border border-line-2 bg-paper px-[11px] py-[9px] text-[14px]"
+                          />
+                          <button
+                            onClick={() => savePassword(a)}
+                            disabled={busy || pwValue.length < 8}
+                            className="inline-flex h-10 items-center rounded-[9px] border border-ink bg-ink px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] text-white disabled:opacity-50"
+                          >
+                            {busy ? "Saving…" : "Save Password"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setPwFor(null);
+                              setPwValue("");
+                            }}
+                            disabled={busy}
+                            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] text-text"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        <p className="mt-[8px] text-[11.5px] text-muted">
+                          Sets their password immediately, no email needed. Share it with them and they can sign in at once.
+                        </p>
+                      </div>
+                    )}
 
                     {!isSelf && (
                       <div className="mt-3 border-t border-line pt-3">
