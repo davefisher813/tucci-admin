@@ -1,21 +1,12 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import SetPasswordForm from "@/components/auth/SetPasswordForm";
+import SetPasswordClient from "@/components/auth/SetPasswordClient";
 
-export default async function SetPasswordPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+// Client-rendered on purpose: invite / recovery links deliver the session token
+// in the URL hash (#access_token=...) or as a ?code=, neither of which the
+// server can read. The client component reads it, establishes the session, then
+// shows the password form.
+export const dynamic = "force-dynamic";
 
-  if (!user) {
-    redirect(
-      `/login?error=${encodeURIComponent(
-        "Open the link from your invite email to set your password."
-      )}`
-    );
-  }
-
+export default function SetPasswordPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm">
@@ -25,7 +16,7 @@ export default async function SetPasswordPage() {
         <p className="mb-6 text-sm text-ink/60">
           Welcome. Set a password to finish setting up your account.
         </p>
-        <SetPasswordForm email={user.email ?? ""} />
+        <SetPasswordClient />
       </div>
     </main>
   );
