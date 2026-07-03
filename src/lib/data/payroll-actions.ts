@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 export type PayrollRow = {
@@ -33,6 +35,7 @@ export async function getPayroll(
   from: string,
   to: string
 ): Promise<PayrollResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { lower, upper } = bounds(from, to);
 

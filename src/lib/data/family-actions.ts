@@ -1,5 +1,7 @@
 "use server";
 
+import { requireRole } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error: string | null; id?: string };
@@ -13,6 +15,7 @@ export async function createFamily(input: {
   point_of_contact?: string | null;
   notes?: string | null;
 }): Promise<ActionResult> {
+  await requireRole();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("families")
@@ -38,6 +41,7 @@ export async function updateFamily(input: {
   primary_email: string | null;
   primary_phone: string | null;
 }): Promise<ActionResult> {
+  await requireRole();
   const supabase = await createClient();
   const { error } = await supabase
     .from("families")
@@ -52,6 +56,7 @@ export async function updateFamily(input: {
 }
 
 export async function deleteFamily(id: string): Promise<ActionResult> {
+  await requireRole();
   const supabase = await createClient();
   const { error } = await supabase
     .from("families")
@@ -67,6 +72,7 @@ export async function createAthlete(input: {
   last_name: string;
   position: string;
 }): Promise<ActionResult & { athlete?: { id: string; family_id: string; first_name: string; last_name: string } }> {
+  await requireRole();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("athletes")
@@ -92,6 +98,7 @@ export async function createAthlete(input: {
 }
 
 export async function deleteAthlete(id: string): Promise<ActionResult> {
+  await requireRole();
   const supabase = await createClient();
   const { error } = await supabase
     .from("athletes")

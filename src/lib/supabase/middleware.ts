@@ -38,6 +38,10 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/login") ||
     path.startsWith("/signup") ||
     path.startsWith("/auth") ||
+    // set-password is reached from an invite/recovery email. The session token
+    // arrives in the URL hash, which the server can't see, so this page must be
+    // allowed through unauthenticated; the client establishes the session.
+    path.startsWith("/set-password") ||
     path === "/unauthorized";
 
   // Not signed in and hitting a protected route -> login

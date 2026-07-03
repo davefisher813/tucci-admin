@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error: string | null };
@@ -25,6 +27,7 @@ export async function setSplittable(
   assetId: string,
   value: boolean
 ): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_space_splittable", {
     p_asset: assetId,
@@ -40,6 +43,7 @@ export async function setCoverage(
   parentId: string,
   childIds: string[]
 ): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_space_coverage", {
     p_parent: parentId,

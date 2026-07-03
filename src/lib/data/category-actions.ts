@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error: string | null };
@@ -17,6 +19,7 @@ export type ServiceCategory = {
 
 // All categories, active first by sort order. Read-only for dropdowns/report.
 export async function getServiceCategories(): Promise<ServiceCategory[]> {
+  await requireOwner();
   const supabase = await createClient();
   const { data } = await supabase
     .from("service_categories")
@@ -31,6 +34,7 @@ export async function createServiceCategory(input: {
   color_hex?: string | null;
   sort_order?: number;
 }): Promise<ActionResult> {
+  await requireOwner();
   const name = input.name.trim();
   if (!name) return { error: "Name is required." };
   const supabase = await createClient();
@@ -74,6 +78,7 @@ export async function updateServiceCategory(input: {
   sort_order?: number;
   is_active?: boolean;
 }): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (input.name !== undefined) {
@@ -95,6 +100,7 @@ export async function updateServiceCategory(input: {
 
 // Delete a category. Guarded: refuses if any service still references it.
 export async function deleteServiceCategory(id: string): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
 
   const { count } = await supabase

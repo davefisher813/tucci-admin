@@ -12,7 +12,7 @@ export default async function ClientsPage() {
   const [{ data: famData }, { data: athData }] = await Promise.all([
     supabase
       .from("families")
-      .select("id, family_name, primary_email, primary_phone")
+      .select("id, family_name, primary_email, primary_phone, client_type, sport, point_of_contact")
       .eq("is_active", true)
       .order("family_name", { ascending: true }),
     supabase

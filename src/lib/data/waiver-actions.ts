@@ -1,5 +1,7 @@
 "use server";
 
+import { requireRole } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 type AthleteInput = {
@@ -13,6 +15,7 @@ type Result = { error: string | null; familyId?: string };
 export async function createWaiverIntake(
   formData: FormData
 ): Promise<Result> {
+  await requireRole();
   const supabase = await createClient();
 
   const file = formData.get("pdf");

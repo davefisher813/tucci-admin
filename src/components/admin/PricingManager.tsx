@@ -97,7 +97,7 @@ export default function PricingManager({
               <input
                 value={sName}
                 onChange={(e) => setSName(e.target.value)}
-                placeholder="Full Cage — Hourly"
+                placeholder="Full Cage Hourly"
                 className="rounded-[9px] border border-line-2 px-[11px] py-[11px] text-[14px]"
               />
             </div>

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateStripeCustomer, stripeRequest } from "@/lib/stripe/server";
 
@@ -25,6 +27,7 @@ export async function createSubscriptionCheckout(input: {
   familyId: string;
   tier: Tier;
 }): Promise<LinkResult> {
+  await requireOwner();
   try {
     if (!input.familyId) return { url: null, error: "Pick a family." };
     const envKey = PRICE_ENV[input.tier];
@@ -73,6 +76,7 @@ export async function setCancelAtPeriodEnd(input: {
   subscriptionId: string | null;
   cancel: boolean;
 }): Promise<ActionResult> {
+  await requireOwner();
   try {
     if (input.subscriptionId) {
       await stripeRequest(

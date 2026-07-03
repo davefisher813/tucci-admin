@@ -1,5 +1,7 @@
 "use server";
 
+import { requireRole } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 import { getFacilityHours, getPeakWindow } from "@/lib/data/hours-actions";
 import {
@@ -148,6 +150,7 @@ export async function getSpaceValue(
   customStart?: string,
   customEnd?: string
 ): Promise<SpaceValuePayload> {
+  await requireRole();
   const supabase = await createClient();
   const { start, end, label } = periodRange(period, customStart, customEnd);
 

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
@@ -10,6 +12,7 @@ export async function setUserRole(input: {
   user_id: string;
   role: string;
 }): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase
     .from("users")
@@ -40,6 +43,7 @@ export async function updateCoachProfile(input: {
   specialties: string[];
   is_taking_new: boolean;
 }): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase.from("coach_profiles").upsert(
     {
@@ -65,6 +69,7 @@ export async function createCoachWithLogin(input: {
   error: string | null;
   coach?: { id: string; full_name: string };
 }> {
+  await requireOwner();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key)

@@ -29,7 +29,13 @@ export type Service = {
 
 export type Coach = { id: string; full_name: string };
 
-export type FamilyLite = { id: string; family_name: string };
+export type FamilyLite = {
+  id: string;
+  family_name: string;
+  client_type?: string | null;
+  sport?: string | null;
+  point_of_contact?: string | null;
+};
 
 export type AthleteLite = {
   id: string;
@@ -90,7 +96,7 @@ export async function getFamilies(): Promise<FamilyLite[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("families")
-    .select("id, family_name")
+    .select("id, family_name, client_type, sport, point_of_contact")
     .eq("is_active", true)
     .order("family_name", { ascending: true });
   return (data as FamilyLite[]) ?? [];

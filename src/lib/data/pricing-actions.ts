@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error: string | null };
@@ -13,6 +15,7 @@ export async function updateServiceRates(input: {
   peak_rate_cents: number | null;
   min_duration_hours: number;
 }): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const patch: Record<string, unknown> = {
     name: input.name,

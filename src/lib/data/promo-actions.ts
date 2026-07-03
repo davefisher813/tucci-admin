@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error: string | null };
@@ -13,6 +15,7 @@ export async function createPromoCode(input: {
   valid_to: string | null;
   notes: string | null;
 }): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase.from("promo_codes").insert({
     code: input.code.trim().toUpperCase(),
@@ -36,6 +39,7 @@ export async function setPromoActive(
   id: string,
   active: boolean
 ): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase
     .from("promo_codes")
@@ -46,6 +50,7 @@ export async function setPromoActive(
 }
 
 export async function deletePromoCode(id: string): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase.from("promo_codes").delete().eq("id", id);
   if (error) {

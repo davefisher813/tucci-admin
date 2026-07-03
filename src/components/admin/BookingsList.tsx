@@ -28,6 +28,8 @@ export type BookingListRow = {
   service_name: string;
   coach_name: string;
   space_name: string;
+  paid_at?: string | null;
+  paid_method?: string | null;
 };
 
 type Filter = "upcoming" | "past" | "cancelled" | "all";
@@ -308,6 +310,11 @@ export default function BookingsList({
                   }`}
                 >
                   {b.status.replace(/_/g, " ")}
+                  {b.status !== "cancelled" && b.total_cents > 0
+                    ? b.paid_at
+                      ? " · Paid"
+                      : " · Unpaid"
+                    : ""}
                 </div>
               </button>
             );

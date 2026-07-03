@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error: string | null };
@@ -17,6 +19,7 @@ export type PeakWindow = {
 };
 
 export async function getFacilityHours(): Promise<FacilityDay[]> {
+  await requireOwner();
   const supabase = await createClient();
   const { data } = await supabase
     .from("facility_hours")
@@ -26,6 +29,7 @@ export async function getFacilityHours(): Promise<FacilityDay[]> {
 }
 
 export async function getPeakWindow(): Promise<PeakWindow | null> {
+  await requireOwner();
   const supabase = await createClient();
   const { data } = await supabase
     .from("facility_peak_window")
@@ -38,6 +42,7 @@ export async function getPeakWindow(): Promise<PeakWindow | null> {
 export async function updateFacilityHours(
   days: FacilityDay[]
 ): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
 
   // Validate before writing so a bad row never reaches the DB.
@@ -73,6 +78,7 @@ export async function updateFacilityHours(
 export async function updatePeakWindow(
   win: PeakWindow
 ): Promise<ActionResult> {
+  await requireOwner();
   if (win.peak_end_minute <= win.peak_start_minute) {
     return { error: "Peak end must be after peak start." };
   }

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireRole } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error: string | null; id?: string };
@@ -32,6 +34,7 @@ export async function updateBooking(input: {
   status?: string;
   total_cents?: number;
 }): Promise<ActionResult> {
+  await requireRole();
   const supabase = await createClient();
   const patch: Record<string, unknown> = {
     asset_id: input.asset_id,
@@ -55,6 +58,7 @@ export async function updateBooking(input: {
 }
 
 export async function cancelBooking(id: string): Promise<ActionResult> {
+  await requireRole();
   const supabase = await createClient();
   const { error } = await supabase
     .from("bookings")
@@ -78,6 +82,7 @@ export async function createBooking(input: {
   total_cents: number;
   want_half: boolean;
 }): Promise<ActionResult> {
+  await requireRole();
   const supabase = await createClient();
 
   const isConflict = (msg: string) => /23p01|overlap|exclude/i.test(msg);
@@ -140,4 +145,23 @@ export async function createBooking(input: {
   }
 
   return { error: null, id };
+}
+
+// Mark a booking paid or unpaid. Staff-level: front desk records payments.
+export async function setBookingPaid(input: {
+  id: string;
+  paid: boolean;
+  method?: string | null;
+}): Promise<{ error: string | null }> {
+  await requireRole();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("bookings")
+    .update(
+      input.paid
+        ? { paid_at: new Date().toISOString(), paid_method: input.method ?? null }
+        : { paid_at: null, paid_method: null }
+    )
+    .eq("id", input.id);
+  return { error: error ? error.message : null };
 }

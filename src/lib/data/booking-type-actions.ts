@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 export type BookingType = {
@@ -13,6 +15,7 @@ export type BookingType = {
 };
 
 export async function getBookingTypes(): Promise<BookingType[]> {
+  await requireOwner();
   const supabase = await createClient();
   const { data } = await supabase
     .from("booking_types")
@@ -37,6 +40,7 @@ export async function createBookingType(input: {
   color: string;
   sort_order: number;
 }): Promise<{ error: string | null; bookingType?: BookingType }> {
+  await requireOwner();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("booking_types")
@@ -56,6 +60,7 @@ export async function updateBookingType(
   id: string,
   patch: { label?: string; color?: string; sort_order?: number }
 ): Promise<{ error: string | null }> {
+  await requireOwner();
   const supabase = await createClient();
   const upd: Record<string, unknown> = {};
   if (patch.label !== undefined) upd.label = patch.label.trim();
@@ -72,6 +77,7 @@ export async function setBookingTypeActive(
   id: string,
   is_active: boolean
 ): Promise<{ error: string | null }> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase
     .from("booking_types")
@@ -83,6 +89,7 @@ export async function setBookingTypeActive(
 export async function deleteBookingType(
   id: string
 ): Promise<{ error: string | null }> {
+  await requireOwner();
   const supabase = await createClient();
   const { data: bt } = await supabase
     .from("booking_types")

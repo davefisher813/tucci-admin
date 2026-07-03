@@ -1,5 +1,7 @@
 "use server";
 
+import { requireRole } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error: string | null };
@@ -10,6 +12,7 @@ export async function checkInBooking(
   bookingId: string,
   method: "staff" | "self" = "staff"
 ): Promise<ActionResult> {
+  await requireRole();
   const supabase = await createClient();
   const { error } = await supabase.rpc("check_in_booking", {
     p_booking_id: bookingId,
@@ -31,6 +34,7 @@ export async function checkInBooking(
 }
 
 export async function undoCheckIn(bookingId: string): Promise<ActionResult> {
+  await requireRole();
   const supabase = await createClient();
   const { error } = await supabase
     .from("bookings")

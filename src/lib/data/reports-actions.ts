@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 
 export type ReportSummary = {
@@ -34,6 +36,7 @@ export async function getReportSummary(
   from: string,
   to: string
 ): Promise<ReportSummary> {
+  await requireOwner();
   const supabase = await createClient();
   const { lower, upper } = bounds(from, to);
 

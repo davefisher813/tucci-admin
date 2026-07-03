@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clock } from "@/lib/format";
 import { checkInBooking, undoCheckIn } from "@/lib/data/checkin-actions";
+import { setBookingPaid } from "@/lib/data/booking-actions";
 
 export type CheckInRow = {
   id: string;
@@ -13,6 +14,8 @@ export type CheckInRow = {
   who: string;
   service_name: string;
   space_name: string;
+  paid_at: string | null;
+  total_cents: number;
 };
 
 function initials(name: string): string {
@@ -58,6 +61,14 @@ export default function CheckInList({ rows }: { rows: CheckInRow[] }) {
     router.refresh();
   }
 
+  async function doPaid(id: string) {
+    setBusy(id);
+    const res = await setBookingPaid({ id, paid: true });
+    setBusy(null);
+    if (res.error) setErr(res.error);
+    else router.refresh();
+  }
+
   function Row({ r }: { r: CheckInRow }) {
     const isIn = !!r.checked_in_at;
     return (
@@ -77,6 +88,20 @@ export default function CheckInList({ rows }: { rows: CheckInRow[] }) {
             {clock(r.start_time)} · {r.service_name} · {r.space_name}
           </div>
         </div>
+        {r.total_cents > 0 &&
+          (r.paid_at ? (
+            <span className="rounded-full bg-success/[.14] px-2 py-[4px] font-display text-[10px] font-extrabold text-success">
+              Paid
+            </span>
+          ) : (
+            <button
+              onClick={() => doPaid(r.id)}
+              disabled={busy === r.id}
+              className="rounded-full bg-gold/[.22] px-2 py-[4px] font-display text-[10px] font-extrabold text-text disabled:opacity-50"
+            >
+              Unpaid · ${Math.round(r.total_cents / 100)}
+            </button>
+          ))}
         {isIn ? (
           <button
             onClick={() => doUndo(r.id)}

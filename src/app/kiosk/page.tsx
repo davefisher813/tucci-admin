@@ -59,8 +59,8 @@ export default async function KioskPage() {
             .replace(/\b\w/g, (c) => c.toUpperCase())
         : "Session"),
     time: fmtTime(b.start_time),
-    service_name: b.services?.name ?? "—",
-    space_name: b.assets?.name ?? "—",
+    service_name: b.services?.name ?? "-",
+    space_name: b.assets?.name ?? "-",
     checkedIn: b.checked_in_at != null,
   }));
 

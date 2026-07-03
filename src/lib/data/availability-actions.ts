@@ -1,5 +1,7 @@
 "use server";
 
+import { requireRole } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 import { getSpaceCoverage } from "@/lib/data/resources";
 
@@ -14,6 +16,7 @@ export async function getDayBookings(date: string): Promise<{
   bookings: DayBooking[];
   coverage: Record<string, string[]>;
 }> {
+  await requireRole();
   const supabase = await createClient();
 
   const start = new Date(date + "T00:00:00");

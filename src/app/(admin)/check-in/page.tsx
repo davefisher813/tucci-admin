@@ -8,6 +8,8 @@ type Joined = {
   start_time: string;
   status: string;
   checked_in_at: string | null;
+  paid_at: string | null;
+  total_cents: number | null;
   booking_type: string | null;
   assets: { name: string } | null;
   services: { name: string } | null;
@@ -26,7 +28,7 @@ export default async function CheckInPage() {
   const { data } = await supabase
     .from("bookings")
     .select(
-      `id, start_time, status, checked_in_at, booking_type,
+      `id, start_time, status, checked_in_at, paid_at, total_cents, booking_type,
        assets ( name ),
        services ( name ),
        families ( family_name )`
@@ -43,11 +45,13 @@ export default async function CheckInPage() {
     start_time: b.start_time,
     status: b.status,
     checked_in_at: b.checked_in_at,
+    paid_at: b.paid_at ?? null,
+    total_cents: b.total_cents ?? 0,
     who:
       b.families?.family_name ??
       (b.booking_type ? b.booking_type.replace(/_/g, " ") : "Session"),
-    service_name: b.services?.name ?? "—",
-    space_name: b.assets?.name ?? "—",
+    service_name: b.services?.name ?? "-",
+    space_name: b.assets?.name ?? "-",
   }));
 
   return <CheckInList rows={rows} />;

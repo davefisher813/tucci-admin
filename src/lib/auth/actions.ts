@@ -18,24 +18,10 @@ export async function login(formData: FormData) {
   redirect("/today");
 }
 
-export async function signup(formData: FormData) {
-  const supabase = await createClient();
-  const email = String(formData.get("email") ?? "");
-  const password = String(formData.get("password") ?? "");
-  const fullName = String(formData.get("full_name") ?? "");
-
-  // The 018 trigger auto-creates the public.users row (role=family) on signup.
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { full_name: fullName } },
-  });
-  if (error) {
-    redirect(`/signup?error=${encodeURIComponent(error.message)}`);
-  }
-
-  revalidatePath("/", "layout");
-  redirect("/today");
+// Self-registration is disabled. This is an internal tool; accounts are created
+// by a manager on the Accounts screen. The signup route redirects to login.
+export async function signup(_formData: FormData) {
+  redirect("/login");
 }
 
 export async function signout() {

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireRole } from "@/lib/auth/guard";
+
 import { randomUUID } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 
@@ -44,6 +46,7 @@ export async function createBulkBookings(input: {
   half_slots?: Record<string, number>;
   notes?: string | null;
 }): Promise<BulkResult> {
+  await requireRole();
   const supabase = await createClient();
 
   if (input.asset_ids.length === 0) {
@@ -171,6 +174,7 @@ export async function createBulkBookings(input: {
 export async function cancelManyBookings(
   ids: string[]
 ): Promise<{ cancelled: number; error: string | null }> {
+  await requireRole();
   if (ids.length === 0) return { cancelled: 0, error: null };
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -189,6 +193,7 @@ export async function cancelSeries(
   groupId: string,
   fromTime?: string
 ): Promise<{ cancelled: number; error: string | null }> {
+  await requireRole();
   const supabase = await createClient();
   let q = supabase
     .from("bookings")
@@ -210,6 +215,7 @@ export type SeriesInfo = {
 // Looks up whether a booking belongs to a recurring series, and lists the
 // series members at or after this booking's start ("this and all future").
 export async function getSeriesInfo(bookingId: string): Promise<SeriesInfo> {
+  await requireRole();
   const supabase = await createClient();
   const { data: b } = await supabase
     .from("bookings")
@@ -252,6 +258,7 @@ export async function updateManyBookings(
   skipped: { id: string; reason: string }[];
   error: string | null;
 }> {
+  await requireRole();
   if (updates.length === 0) return { updated: 0, skipped: [], error: null };
   const supabase = await createClient();
   let updated = 0;

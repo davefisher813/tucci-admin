@@ -10,6 +10,7 @@ import {
   type SeriesInfo,
   type BookingUpdate,
 } from "@/lib/data/bulk-booking-actions";
+import { setBookingPaid } from "@/lib/data/booking-actions";
 import type { Asset, Coach, Service, FamilyLite } from "@/lib/data/resources";
 import type { BookingType } from "@/lib/data/booking-type-actions";
 
@@ -27,6 +28,9 @@ export type EditableBooking = {
   status: string;
   total_cents: number;
   who: string;
+  coach_name?: string | null;
+  paid_at?: string | null;
+  paid_method?: string | null;
 };
 
 function toLocalInput(iso: string): string {
@@ -58,6 +62,8 @@ export default function EditBookingModal({
   const [coachId, setCoachId] = useState(booking.coach_id ?? "");
   const [serviceId, setServiceId] = useState(booking.service_id ?? "");
   const [clientId, setClientId] = useState(booking.family_id ?? "");
+  const [paidAt, setPaidAt] = useState<string | null>(booking.paid_at ?? null);
+  const [paidBusy, setPaidBusy] = useState(false);
   const [typeKey, setTypeKey] = useState(booking.booking_type ?? "");
   const [notes, setNotes] = useState(booking.notes ?? "");
   const [start, setStart] = useState(toLocalInput(booking.start_time));
@@ -308,6 +314,14 @@ export default function EditBookingModal({
                 </option>
               ))}
             </select>
+            {!coachId &&
+              booking.coach_name &&
+              booking.coach_name !== "Unassigned" && (
+                <p className="mt-[6px] text-[11.5px] text-muted">
+                  Coach On File: {booking.coach_name} (name only). Picking a
+                  coach above replaces it.
+                </p>
+              )}
           </Field>
           <Field label="Client">
             <select
@@ -322,6 +336,55 @@ export default function EditBookingModal({
                 </option>
               ))}
             </select>
+            {(() => {
+              const fam = families.find((f) => f.id === clientId);
+              if (!fam) return null;
+              const bits = [
+                fam.client_type
+                  ? fam.client_type.charAt(0).toUpperCase() +
+                    fam.client_type.slice(1)
+                  : null,
+                fam.sport || null,
+                fam.point_of_contact ? `POC ${fam.point_of_contact}` : null,
+              ].filter(Boolean);
+              if (bits.length === 0) return null;
+              return (
+                <p className="mt-[6px] text-[11.5px] text-muted">
+                  {bits.join(" · ")}
+                </p>
+              );
+            })()}
+          </Field>
+          <Field label="Payment">
+            <div className="flex items-center gap-2">
+              <span
+                className={`rounded-full px-2 py-[3px] font-display text-[10px] font-extrabold ${
+                  paidAt
+                    ? "bg-success/[.14] text-success"
+                    : "bg-gold/[.20] text-text"
+                }`}
+              >
+                {paidAt ? "Paid" : "Unpaid"}
+              </span>
+              <button
+                type="button"
+                disabled={paidBusy}
+                onClick={async () => {
+                  setPaidBusy(true);
+                  const next = !paidAt;
+                  const res = await setBookingPaid({
+                    id: booking.id,
+                    paid: next,
+                  });
+                  setPaidBusy(false);
+                  if (!res.error)
+                    setPaidAt(next ? new Date().toISOString() : null);
+                }}
+                className="rounded-[9px] border border-line-2 bg-paper px-[12px] py-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-text hover:border-accent disabled:opacity-50"
+              >
+                {paidBusy ? "Saving…" : paidAt ? "Mark Unpaid" : "Mark Paid"}
+              </button>
+            </div>
           </Field>
           <Field label="Booking Type">
             <select

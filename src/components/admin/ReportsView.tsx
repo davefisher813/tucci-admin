@@ -93,6 +93,12 @@ export default function ReportsView() {
               className="rdt"
             />
           </div>
+          <a
+            href={`/api/reports/csv?from=${from}&to=${to}`}
+            className="inline-flex h-[38px] items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[11px] font-extrabold tracking-[.02em] text-text hover:border-accent"
+          >
+            Download CSV
+          </a>
         </div>
       </div>
 

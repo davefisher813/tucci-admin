@@ -67,7 +67,7 @@ export default function AthletesManager({
   const t = term.trim().toLowerCase();
 
   const rows = athletes
-    .map((a) => ({ ...a, family: famName.get(a.family_id) ?? "—" }))
+    .map((a) => ({ ...a, family: famName.get(a.family_id) ?? "-" }))
     .filter(
       (a) =>
         !t ||
@@ -228,12 +228,12 @@ export default function AthletesManager({
                       <Detail k="Family" v={a.family} />
                       <Detail
                         k="Position"
-                        v={a.position !== "unknown" ? cap(a.position) : "—"}
+                        v={a.position !== "unknown" ? cap(a.position) : "-"}
                       />
-                      <Detail k="Grade" v={a.grade || "—"} />
-                      <Detail k="School" v={a.school || "—"} />
-                      <Detail k="Bats" v={handed(a.bats) || "—"} />
-                      <Detail k="Throws" v={handed(a.throws) || "—"} />
+                      <Detail k="Grade" v={a.grade || "-"} />
+                      <Detail k="School" v={a.school || "-"} />
+                      <Detail k="Bats" v={handed(a.bats) || "-"} />
+                      <Detail k="Throws" v={handed(a.throws) || "-"} />
                     </dl>
                   </div>
                 )}

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireOwner } from "@/lib/auth/guard";
+
 import { createClient } from "@/lib/supabase/server";
 import type { Service } from "@/lib/data/resources";
 
@@ -16,6 +18,7 @@ export async function createAsset(input: {
   description?: string | null;
   features?: string[];
 }): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("assets")
@@ -70,6 +73,7 @@ export async function updateAsset(input: {
   features?: string[];
   display_order?: number;
 }): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const patch: Record<string, unknown> = {
     name: input.name,
@@ -86,6 +90,7 @@ export async function updateAsset(input: {
 }
 
 export async function deleteAsset(id: string): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase
     .from("assets")
@@ -98,6 +103,7 @@ export async function deleteAsset(id: string): Promise<ActionResult> {
 // ---- ASSET TYPES (the editable type list: Full Cage, Trackman, etc.) ----
 
 export async function createAssetType(label: string): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { data: rows } = await supabase
     .from("asset_types")
@@ -119,6 +125,7 @@ export async function updateAssetType(
   id: string,
   label: string
 ): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase
     .from("asset_types")
@@ -129,6 +136,7 @@ export async function updateAssetType(
 }
 
 export async function deleteAssetType(id: string): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase
     .from("asset_types")
@@ -149,6 +157,7 @@ export async function createService(input: {
   unit: string;
   min_duration_hours: number;
 }): Promise<ActionResult & { service?: Service }> {
+  await requireOwner();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("services")
@@ -177,6 +186,7 @@ export async function updateService(input: {
   category_id?: string | null;
   base_rate_cents: number;
 }): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const patch: Record<string, unknown> = {
     name: input.name,
@@ -193,6 +203,7 @@ export async function updateService(input: {
 }
 
 export async function deleteService(id: string): Promise<ActionResult> {
+  await requireOwner();
   const supabase = await createClient();
   const { error } = await supabase
     .from("services")

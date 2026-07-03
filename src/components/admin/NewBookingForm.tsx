@@ -728,7 +728,7 @@ export default function NewBookingForm({
       want_half: false,
       half_slots: blockMode ? undefined : halfSlots,
       notes: blockMode
-        ? [blockLabel.trim(), blockNotes.trim()].filter(Boolean).join(" — ") ||
+        ? [blockLabel.trim(), blockNotes.trim()].filter(Boolean).join(" · ") ||
           null
         : null,
     });
@@ -820,7 +820,7 @@ export default function NewBookingForm({
         {/* WHERE */}
         <div>
           <SecHead>Where</SecHead>
-          <p className="lab">Tap the map below, or pick a space here</p>
+          <p className="lab">Spaces</p>
           <select
             value=""
             onChange={(e) => {
@@ -1017,7 +1017,7 @@ export default function NewBookingForm({
                 {repeat !== "manual" && excluded.size > 0
                   ? `, ${excluded.size} skipped`
                   : ""}
-                ) {repeat === "manual" ? "— tap to remove" : "— tap to skip"}
+                ) {repeat === "manual" ? "(tap to remove)" : "(tap to skip)"}
               </p>
               {generated.length === 0 ? (
                 <p className="hint">

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireRole } from "@/lib/auth/guard";
+
 import { getOrCreateStripeCustomer, stripeRequest } from "@/lib/stripe/server";
 
 const APP_URL =
@@ -15,6 +17,7 @@ export async function createCheckoutSession(input: {
   amountCents: number;
   description: string;
 }): Promise<Result> {
+  await requireRole();
   try {
     if (!input.familyId) return { url: null, error: "Pick a family." };
     if (!input.amountCents || input.amountCents < 50) {

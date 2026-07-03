@@ -81,6 +81,9 @@ export default function FacilityMap({
   onToggleSplit: (assetId: string) => void;
   onToggleHalf: (assetId: string, slot: number) => void;
 }) {
+  const anySetupMissing = LANES.some(
+    (l) => matchId(l.candidates, assets) == null
+  );
   return (
     <div className="nbk-map-wrap">
       <div className="nbk-map-svg-wrap">
@@ -163,10 +166,12 @@ export default function FacilityMap({
           <span className="nbk-lg-swatch" />
           Booked
         </span>
-        <span className="nbk-lg nbk-lg-disabled">
-          <span className="nbk-lg-swatch" />
-          Not set up
-        </span>
+        {anySetupMissing && (
+          <span className="nbk-lg nbk-lg-disabled">
+            <span className="nbk-lg-swatch" />
+            Not Set Up
+          </span>
+        )}
       </div>
 
       <style>{`

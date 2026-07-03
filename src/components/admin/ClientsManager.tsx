@@ -15,6 +15,9 @@ export type FamilyRow = {
   family_name: string;
   primary_email: string | null;
   primary_phone: string | null;
+  client_type?: string | null;
+  sport?: string | null;
+  point_of_contact?: string | null;
 };
 
 export type AthleteRow = {
@@ -189,9 +192,13 @@ export default function ClientsManager({
                     <div className="font-display text-[15px] font-bold text-text">
                       {f.family_name}
                     </div>
-                    <div className="text-[12px] text-muted">
+                    <div className="truncate text-[12px] text-muted">
                       {kids.length} {kids.length === 1 ? "Athlete" : "Athletes"}
                       {f.primary_phone ? ` · ${formatPhone(f.primary_phone)}` : ""}
+                      {f.client_type
+                        ? ` · ${f.client_type.charAt(0).toUpperCase()}${f.client_type.slice(1)}`
+                        : ""}
+                      {f.sport ? ` · ${f.sport}` : ""}
                     </div>
                   </div>
                   <span
@@ -206,6 +213,11 @@ export default function ClientsManager({
                     {f.primary_email && (
                       <div className="mb-2 text-[12px] text-muted">
                         {f.primary_email}
+                      </div>
+                    )}
+                    {f.point_of_contact && (
+                      <div className="mb-2 text-[12px] text-muted">
+                        Point Of Contact: {f.point_of_contact}
                       </div>
                     )}
 

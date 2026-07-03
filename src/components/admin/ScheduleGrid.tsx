@@ -30,6 +30,7 @@ export type GridBooking = {
   end_hour: number;
   half_slot: number | null;
   booking_type?: string | null;
+  paid_at?: string | null;
 };
 
 const START_HOUR = 8;
@@ -556,6 +557,8 @@ export default function ScheduleGrid({
       status: b.status,
       total_cents: b.total_cents,
       who: b.who,
+      coach_name: b.coach_name,
+      paid_at: b.paid_at ?? null,
     };
   }
 
@@ -847,7 +850,7 @@ function OverlayBlock({
       <button
         onClick={() => onEdit(b)}
         {...holdProps}
-        style={{ ...place, background: STRIPE, borderLeft: "4px solid #9CA3AF" }}
+        style={{ ...place, background: STRIPE, borderLeft: "4px solid var(--muted)" }}
         className="pointer-events-auto flex flex-col justify-center overflow-hidden rounded-[9px] border border-line-2 px-[9px] py-[4px] text-left hover:shadow-md"
       >
         <div className="truncate font-display text-[12px] font-extrabold text-muted">
@@ -1072,7 +1075,7 @@ function MobileAgenda({
                 past={new Date(b.end_time).getTime() < nowMs}
                 railColor={
                   b.booking_type === "blocked"
-                    ? "#9CA3AF"
+                    ? "var(--muted)"
                     : typeColors[b.booking_type ?? ""] ?? "#1E78A6"
                 }
                 onOpen={() => setSheet(b)}
