@@ -11,6 +11,7 @@ const GROUPS: Group[] = [
   {
     title: "Booking",
     items: [
+      { label: "Search", href: "/search" },
       { label: "Today", href: "/today" },
       { label: "Schedule", href: "/schedule" },
       { label: "New Booking", href: "/new-booking" },
@@ -45,21 +46,21 @@ const GROUPS: Group[] = [
   },
 ];
 
-// Owners also see Accounts and Backup under System.
+// Owner + Manager (admin) see the Audit Log. Owners also see Accounts and Backup.
 function groupsForRole(role?: string): Group[] {
-  if (role !== "owner") return GROUPS;
-  return GROUPS.map((g) =>
-    g.title === "System"
-      ? {
-          ...g,
-          items: [
-            { label: "Accounts", href: "/accounts" },
-            { label: "Backup", href: "/backup" },
-            ...g.items,
-          ],
-        }
-      : g
-  );
+  const isOwner = role === "owner";
+  const isManager = role === "owner" || role === "admin";
+  if (!isManager) return GROUPS;
+  return GROUPS.map((g) => {
+    if (g.title !== "System") return g;
+    const extra: Item[] = [];
+    if (isOwner) {
+      extra.push({ label: "Accounts", href: "/accounts" });
+      extra.push({ label: "Backup", href: "/backup" });
+    }
+    extra.push({ label: "Audit Log", href: "/audit-log" });
+    return { ...g, items: [...extra, ...g.items] };
+  });
 }
 
 function NavList({

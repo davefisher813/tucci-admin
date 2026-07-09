@@ -26,6 +26,7 @@ import {
 } from "@/lib/data/booking-type-actions";
 import { createService } from "@/lib/data/settings-actions";
 import { createFamily, createAthlete } from "@/lib/data/family-actions";
+import ClientAutocomplete from "@/components/admin/ClientAutocomplete";
 import { createCoachWithLogin } from "@/lib/data/coach-actions";
 
 const WEEKDAYS = [
@@ -1248,21 +1249,14 @@ export default function NewBookingForm({
               </button>
             </Field>
             <Field label="Client">
-              <select
+              <ClientAutocomplete
+                families={families}
                 value={familyId}
-                onChange={(e) => {
-                  setFamilyId(e.target.value);
+                onChange={(id) => {
+                  setFamilyId(id);
                   setAthleteIds([]);
                 }}
-                className="sel"
-              >
-                <option value="">None</option>
-                {families.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.family_name}
-                  </option>
-                ))}
-              </select>
+              />
               <button
                 type="button"
                 onClick={() => openPanel("family")}

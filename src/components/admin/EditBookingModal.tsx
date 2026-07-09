@@ -12,6 +12,7 @@ import {
 } from "@/lib/data/bulk-booking-actions";
 import { setBookingPaid } from "@/lib/data/booking-actions";
 import type { Asset, Coach, Service, FamilyLite } from "@/lib/data/resources";
+import ClientAutocomplete from "@/components/admin/ClientAutocomplete";
 import type { BookingType } from "@/lib/data/booking-type-actions";
 
 export type EditableBooking = {
@@ -78,6 +79,7 @@ export default function EditBookingModal({
   const [series, setSeries] = useState<SeriesInfo | null>(null);
   const [scope, setScope] = useState<"this" | "future">("this");
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -223,6 +225,49 @@ export default function EditBookingModal({
     router.push(`/new-booking?${p.toString()}`);
   }
 
+  // Build a clean, copyable confirmation. No messaging is sent from the app
+  // (Crossbar handles comms); this is for pasting into Crossbar, a text, or email.
+  function copyConfirm() {
+    const spaceName =
+      assets.find((a) => a.id === assetId)?.name ?? "";
+    const serviceName =
+      services.find((sv) => sv.id === serviceId)?.name ?? "";
+    const coachLabel =
+      coaches.find((c) => c.id === coachId)?.full_name ??
+      booking.coach_name ??
+      "";
+    const startDate = new Date(booking.start_time);
+    const when = startDate.toLocaleString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    const lines = [
+      "Tucci Elite - Booking Confirmed",
+      "",
+      booking.who ? `Client: ${booking.who}` : "",
+      serviceName ? `Session: ${serviceName}` : "",
+      `When: ${when}`,
+      spaceName ? `Space: ${spaceName}` : "",
+      coachLabel ? `Coach: ${coachLabel}` : "",
+      "",
+      "See you at the facility.",
+    ].filter((l) => l !== "");
+    const text = lines.join("\n");
+    navigator.clipboard?.writeText(text).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      },
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      }
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -324,18 +369,11 @@ export default function EditBookingModal({
               )}
           </Field>
           <Field label="Client">
-            <select
+            <ClientAutocomplete
+              families={families}
               value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              className="sel"
-            >
-              <option value="">None</option>
-              {families.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.family_name}
-                </option>
-              ))}
-            </select>
+              onChange={setClientId}
+            />
             {(() => {
               const fam = families.find((f) => f.id === clientId);
               if (!fam) return null;
@@ -413,6 +451,56 @@ export default function EditBookingModal({
               <option value="cancelled">Cancelled</option>
             </select>
           </Field>
+          <div className="rounded-[10px] border border-line bg-bg/60 p-3">
+            <div className="mb-[6px] font-display text-[11px] font-extrabold tracking-[.02em] text-accent">
+              Quick Action
+            </div>
+            <div className="mb-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setStatus("no_show")}
+                className={`flex-1 rounded-[9px] border px-3 py-[8px] font-display text-[11px] font-extrabold tracking-[.02em] ${
+                  status === "no_show"
+                    ? "border-danger bg-danger/[.10] text-danger"
+                    : "border-line-2 bg-paper text-text hover:border-danger"
+                }`}
+              >
+                Mark No-Show
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatus("cancelled")}
+                className={`flex-1 rounded-[9px] border px-3 py-[8px] font-display text-[11px] font-extrabold tracking-[.02em] ${
+                  status === "cancelled"
+                    ? "border-danger bg-danger/[.10] text-danger"
+                    : "border-line-2 bg-paper text-text hover:border-danger"
+                }`}
+              >
+                Late Cancel
+              </button>
+            </div>
+            {(status === "no_show" || status === "cancelled") && (
+              <div>
+                <div className="mb-[5px] text-[11px] text-muted">
+                  Fee to charge (leave 0 for no fee). Set any amount.
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-display text-[14px] font-bold text-muted">
+                    $
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="w-full rounded-[8px] border border-line-2 bg-paper px-3 py-[8px] text-[14px] text-text outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Start">
               <input
@@ -473,6 +561,13 @@ export default function EditBookingModal({
             className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] text-text hover:border-accent disabled:opacity-50"
           >
             Duplicate
+          </button>
+          <button
+            onClick={copyConfirm}
+            disabled={busy}
+            className="inline-flex h-10 items-center rounded-[9px] border border-line-2 bg-paper px-[14px] font-display text-[12px] font-extrabold tracking-[.03em] text-text hover:border-accent disabled:opacity-50"
+          >
+            {copied ? "Copied" : "Copy Details"}
           </button>
           <button
             onClick={onClose}
