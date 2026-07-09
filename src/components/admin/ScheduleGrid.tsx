@@ -33,8 +33,8 @@ export type GridBooking = {
   paid_at?: string | null;
 };
 
-const START_HOUR = 8;
-const END_HOUR = 21; // 8 AM through 9 PM rows
+const START_HOUR = 0;
+const END_HOUR = 23; // full 24 hours; no time cap, conflicts are the only limit
 
 // Base-grid geometry (must match the grid below). Used to position blocks by
 // the minute so :30 starts/ends land halfway through a cell.
@@ -146,6 +146,8 @@ export default function ScheduleGrid({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<EditableBooking | null>(null);
+  // Mobile: switch between the column Grid (same as desktop) and the Agenda list.
+  const [mobileView, setMobileView] = useState<"grid" | "agenda">("agenda");
 
   // Multi-select (desktop): drag across empty cells, or tap one.
   const [sel, setSel] = useState<Set<string>>(new Set()); // `${assetId}@${hour}`
@@ -564,8 +566,38 @@ export default function ScheduleGrid({
 
   return (
     <>
-      {/* Desktop / tablet: full grid */}
-      <div className="hidden overflow-hidden rounded-[16px] border border-line bg-paper md:block">
+      {/* Mobile view toggle */}
+      <div className="mb-3 flex rounded-[10px] bg-[#EDF1F6] p-[3px] md:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileView("grid")}
+          className={`flex-1 rounded-[8px] py-2 text-[14px] font-semibold ${
+            mobileView === "grid"
+              ? "bg-paper text-text shadow-sm"
+              : "bg-transparent text-muted"
+          }`}
+        >
+          Grid
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileView("agenda")}
+          className={`flex-1 rounded-[8px] py-2 text-[14px] font-semibold ${
+            mobileView === "agenda"
+              ? "bg-paper text-text shadow-sm"
+              : "bg-transparent text-muted"
+          }`}
+        >
+          Agenda
+        </button>
+      </div>
+
+      {/* Full grid: always on desktop; on mobile only when Grid is selected */}
+      <div
+        className={`overflow-hidden rounded-[16px] border border-line bg-paper md:block ${
+          mobileView === "grid" ? "block" : "hidden"
+        }`}
+      >
         <div className="overflow-auto" ref={gridScrollRef}>
           <div className="relative min-w-max">
             {/* base grid: header, time labels, empty + half-slot cells */}
@@ -703,8 +735,8 @@ export default function ScheduleGrid({
         </div>
       )}
 
-      {/* Phone: agenda */}
-      <div className="md:hidden">
+      {/* Phone: agenda; hidden when the Grid view is selected */}
+      <div className={mobileView === "agenda" ? "md:hidden" : "hidden"}>
         <MobileAgenda
           date={date}
           bookings={bookings}

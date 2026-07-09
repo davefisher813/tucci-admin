@@ -38,11 +38,11 @@ const WEEKDAYS = [
   ["Sa", 6],
 ] as const;
 
-// "HH:MM" start-time options, 8:00 AM through 9:00 PM in half-hour steps.
+// "HH:MM" start-time options, full 24 hours in half-hour steps. No cap.
+// The only thing that ever blocks a booking is a real conflict.
 const START_OPTIONS: { value: string; label: string }[] = [];
-for (let h = 8; h <= 21; h++) {
+for (let h = 0; h <= 23; h++) {
   for (const m of [0, 30]) {
-    if (h === 21 && m === 30) continue;
     const hh = String(h).padStart(2, "0");
     const mm = String(m).padStart(2, "0");
     const disp = `${h % 12 === 0 ? 12 : h % 12}:${mm} ${h >= 12 ? "PM" : "AM"}`;
@@ -50,18 +50,19 @@ for (let h = 8; h <= 21; h++) {
   }
 }
 
-// End-time options: 8:30 AM through 10:00 PM in half-hour steps.
+// End-time options: full day in half-hour steps, 12:30 AM through 12:00 AM
+// (midnight, stored as 24:00). No cap; conflicts are the only limit.
 const END_OPTIONS: { value: string; label: string }[] = [];
-for (let h = 8; h <= 22; h++) {
+for (let h = 0; h <= 23; h++) {
   for (const m of [0, 30]) {
-    if (h === 8 && m === 0) continue;
-    if (h === 22 && m === 30) continue;
+    if (h === 0 && m === 0) continue;
     const hh = String(h).padStart(2, "0");
     const mm = String(m).padStart(2, "0");
     const disp = `${h % 12 === 0 ? 12 : h % 12}:${mm} ${h >= 12 ? "PM" : "AM"}`;
     END_OPTIONS.push({ value: `${hh}:${mm}`, label: disp });
   }
 }
+END_OPTIONS.push({ value: "24:00", label: "12:00 AM" });
 function hmToMin(s: string): number {
   const [h, m] = s.split(":").map(Number);
   return h * 60 + m;
