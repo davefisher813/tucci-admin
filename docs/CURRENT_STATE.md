@@ -3,10 +3,9 @@ Last Updated: September 11, 2026. Rewritten from `git log`, the file tree, and a
 
 ## PRIORITIES
 
-1. Confirm migration 034 (`bookings.paid_at`, `paid_method`) is applied to the live database; the Bookings paid tracking on main depends on it.
-2. Stripe go-live prerequisites (Dave).
-3. Restore the migration history and harness into the repo; fix the gen-types workflow path.
-4. Fix `npm run lint`.
+1. Stripe go-live prerequisites (Dave). Migration 034 is applied to the live database (confirmed by Dave, September 11, 2026).
+2. Restore the migration history and harness into the repo; fix the gen-types workflow path.
+3. Fix `npm run lint`.
 
 ## ACTIVE
 
